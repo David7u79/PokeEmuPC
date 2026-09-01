@@ -1,0 +1,10 @@
+build/
+CMakeFiles/
+aqtinstall.log
+*.user
+*.vcxproj*
+*.sln
+.vs/
+.cache/
+.ninja_*
+out/
