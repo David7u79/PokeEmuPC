@@ -1,5 +1,6 @@
 #include "pocket/storage/GameRepository.hpp"
 #include "pocket/storage/SchemaMigration.hpp"
+#include "pocket/core/RomFingerprint.hpp"
 #include <QFile>
 #include <QFileInfo>
 #include <QSqlQuery>
@@ -20,7 +21,7 @@ std::string GameRepository::calculateSha256(const std::string& filePath) {
     }
 
     QCryptographicHash hasher(QCryptographicHash::Sha256);
-    constexpr qint64 chunkSize = 65536; // 64KB chunk size to avoid high memory usage on large NDS ROMs
+    constexpr qint64 chunkSize = 65536; // 64KB chunk size
     while (!file.atEnd()) {
         QByteArray chunk = file.read(chunkSize);
         hasher.addData(chunk);
@@ -58,23 +59,17 @@ ImportResult GameRepository::importGame(const std::string& romFilePath) {
         return result;
     }
 
-    // Calculate or fetch SHA256 from cache
-    std::string sha256;
-    auto cacheIt = m_hashCache.find(canonicalPath);
-    if (cacheIt != m_hashCache.end()) {
-        sha256 = cacheIt->second;
-    } else {
-        sha256 = calculateSha256(canonicalPath);
-        if (!sha256.empty()) {
-            m_hashCache[canonicalPath] = sha256;
-        }
-    }
+    // Calculate RomFingerprint ONCE during import
+    Core::RomFingerprint fp = Core::RomFingerprint::calculate(canonicalPath);
+    std::string sha256 = fp.sha256;
 
     if (sha256.empty()) {
         result.status = ImportResultStatus::FileNotFound;
         result.errorMessage = "Unable to compute SHA-256 fingerprint for ROM file.";
         return result;
     }
+
+    m_hashCache[canonicalPath] = sha256;
 
     // Check duplicate by SHA256 in database
     query.prepare("SELECT id FROM games WHERE sha256 = :sha256");
@@ -85,10 +80,13 @@ ImportResult GameRepository::importGame(const std::string& romFilePath) {
         return result;
     }
 
+    // Resolve Canonical Metadata via 4-tier GameMetadataResolver
+    GameMetadata meta = m_metadataResolver.resolve(canonicalPath, fp);
+
     // Create Game entity
     Core::Game game;
     game.id = Core::GameId::generate();
-    game.title = fileInfo.completeBaseName().toStdString();
+    game.title = meta.canonicalTitle.empty() ? fileInfo.completeBaseName().toStdString() : meta.canonicalTitle;
     game.system = systemOpt.value();
     game.romPath = canonicalPath;
     game.sha256 = sha256;
@@ -106,13 +104,13 @@ ImportResult GameRepository::importGame(const std::string& romFilePath) {
     query.bindValue(":system", QString::fromStdString(Core::GameSystemUtils::toString(game.system)));
     query.bindValue(":rom_path", QString::fromStdString(game.romPath));
     query.bindValue(":sha256", QString::fromStdString(game.sha256));
-    query.bindValue(":file_size_bytes", static_cast<qint64>(game.fileSizeBytes));
+    query.bindValue(":file_size_bytes", static_cast<qulonglong>(game.fileSizeBytes));
     query.bindValue(":source", QString::fromStdString(Core::GameSourceUtils::toString(game.source)));
-    query.bindValue(":imported_at_ts", static_cast<qint64>(game.importedAtTs));
+    query.bindValue(":imported_at_ts", static_cast<qlonglong>(game.importedAtTs));
 
     if (!query.exec()) {
         result.status = ImportResultStatus::DatabaseError;
-        result.errorMessage = "Database insertion failed: " + query.lastError().text().toStdString();
+        result.errorMessage = "Failed to insert game record into database: " + query.lastError().text().toStdString();
         return result;
     }
 
@@ -122,22 +120,27 @@ ImportResult GameRepository::importGame(const std::string& romFilePath) {
 }
 
 std::vector<Core::Game> GameRepository::getAllGames() const {
-    std::vector<Core::Game> list;
+    std::vector<Core::Game> games;
     QSqlQuery query("SELECT id, title, system, rom_path, sha256, file_size_bytes, source, imported_at_ts FROM games ORDER BY title ASC");
 
     while (query.next()) {
         Core::Game g;
-        g.id = Core::GameId(query.value("id").toString().toStdString());
-        g.title = query.value("title").toString().toStdString();
-        g.system = Core::GameSystemUtils::fromString(query.value("system").toString().toStdString());
-        g.romPath = query.value("rom_path").toString().toStdString();
-        g.sha256 = query.value("sha256").toString().toStdString();
-        g.fileSizeBytes = static_cast<uint64_t>(query.value("file_size_bytes").toLongLong());
-        g.source = Core::GameSourceUtils::fromString(query.value("source").toString().toStdString());
-        g.importedAtTs = query.value("imported_at_ts").toLongLong();
-        list.push_back(g);
+        g.id = Core::GameId(query.value(0).toString().toStdString());
+        g.title = query.value(1).toString().toStdString();
+
+        g.system = Core::GameSystemUtils::fromString(query.value(2).toString().toStdString());
+
+        g.romPath = query.value(3).toString().toStdString();
+        g.sha256 = query.value(4).toString().toStdString();
+        g.fileSizeBytes = query.value(5).toULongLong();
+
+        g.source = Core::GameSourceUtils::fromString(query.value(6).toString().toStdString());
+
+        g.importedAtTs = query.value(7).toLongLong();
+        games.push_back(g);
     }
-    return list;
+
+    return games;
 }
 
 std::optional<Core::Game> GameRepository::getGameById(const Core::GameId& id) const {
@@ -147,14 +150,18 @@ std::optional<Core::Game> GameRepository::getGameById(const Core::GameId& id) co
 
     if (query.exec() && query.next()) {
         Core::Game g;
-        g.id = Core::GameId(query.value("id").toString().toStdString());
-        g.title = query.value("title").toString().toStdString();
-        g.system = Core::GameSystemUtils::fromString(query.value("system").toString().toStdString());
-        g.romPath = query.value("rom_path").toString().toStdString();
-        g.sha256 = query.value("sha256").toString().toStdString();
-        g.fileSizeBytes = static_cast<uint64_t>(query.value("file_size_bytes").toLongLong());
-        g.source = Core::GameSourceUtils::fromString(query.value("source").toString().toStdString());
-        g.importedAtTs = query.value("imported_at_ts").toLongLong();
+        g.id = Core::GameId(query.value(0).toString().toStdString());
+        g.title = query.value(1).toString().toStdString();
+
+        g.system = Core::GameSystemUtils::fromString(query.value(2).toString().toStdString());
+
+        g.romPath = query.value(3).toString().toStdString();
+        g.sha256 = query.value(4).toString().toStdString();
+        g.fileSizeBytes = query.value(5).toULongLong();
+
+        g.source = Core::GameSourceUtils::fromString(query.value(6).toString().toStdString());
+
+        g.importedAtTs = query.value(7).toLongLong();
         return g;
     }
     return std::nullopt;
@@ -167,14 +174,18 @@ std::optional<Core::Game> GameRepository::getGameBySha256(const std::string& sha
 
     if (query.exec() && query.next()) {
         Core::Game g;
-        g.id = Core::GameId(query.value("id").toString().toStdString());
-        g.title = query.value("title").toString().toStdString();
-        g.system = Core::GameSystemUtils::fromString(query.value("system").toString().toStdString());
-        g.romPath = query.value("rom_path").toString().toStdString();
-        g.sha256 = query.value("sha256").toString().toStdString();
-        g.fileSizeBytes = static_cast<uint64_t>(query.value("file_size_bytes").toLongLong());
-        g.source = Core::GameSourceUtils::fromString(query.value("source").toString().toStdString());
-        g.importedAtTs = query.value("imported_at_ts").toLongLong();
+        g.id = Core::GameId(query.value(0).toString().toStdString());
+        g.title = query.value(1).toString().toStdString();
+
+        g.system = Core::GameSystemUtils::fromString(query.value(2).toString().toStdString());
+
+        g.romPath = query.value(3).toString().toStdString();
+        g.sha256 = query.value(4).toString().toStdString();
+        g.fileSizeBytes = query.value(5).toULongLong();
+
+        g.source = Core::GameSourceUtils::fromString(query.value(6).toString().toStdString());
+
+        g.importedAtTs = query.value(7).toLongLong();
         return g;
     }
     return std::nullopt;
@@ -184,7 +195,7 @@ bool GameRepository::deleteGame(const Core::GameId& id) {
     QSqlQuery query;
     query.prepare("DELETE FROM games WHERE id = :id");
     query.bindValue(":id", QString::fromStdString(id.toString()));
-    return query.exec();
+    return query.exec() && query.numRowsAffected() > 0;
 }
 
 } // namespace Pocket::Storage

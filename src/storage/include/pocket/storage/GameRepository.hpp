@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pocket/core/Game.hpp"
+#include "pocket/storage/GameMetadataResolver.hpp"
 #include "pocketpartner/storage/DatabaseManager.hpp"
 #include <vector>
 #include <optional>
@@ -39,10 +40,14 @@ public:
 
     static std::string calculateSha256(const std::string& filePath);
 
+    GameMetadataResolver& metadataResolver() { return m_metadataResolver; }
+    const GameMetadataResolver& metadataResolver() const { return m_metadataResolver; }
+
 private:
     std::shared_ptr<PocketPartner::Storage::DatabaseManager> m_db;
     // In-memory cache for SHA-256 fingerprints to avoid hashing large files repeatedly
     mutable std::map<std::string, std::string> m_hashCache;
+    GameMetadataResolver m_metadataResolver;
 };
 
 } // namespace Pocket::Storage

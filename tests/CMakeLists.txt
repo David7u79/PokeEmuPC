@@ -32,6 +32,9 @@ add_pocket_test(test_companion_link test_companion_link.cpp)
 add_pocket_test(test_save_safety test_save_safety.cpp)
 add_pocket_test(test_companion_state test_companion_state.cpp)
 
+# ROM Fingerprint, Game Metadata & Artwork Tests
+add_pocket_test(test_game_metadata_artwork test_game_metadata_artwork.cpp)
+
 # IPC & Process Architecture Tests
 add_pocket_test(test_ipc_connection test_ipc_connection.cpp)
 add_pocket_test(test_ipc_reconnect test_ipc_reconnect.cpp)
