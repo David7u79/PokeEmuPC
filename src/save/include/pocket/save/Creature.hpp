@@ -7,6 +7,39 @@
 
 namespace Pocket::Save {
 
+enum class GenerationType {
+    Gen1 = 1,
+    Gen2 = 2,
+    Gen3 = 3
+};
+
+inline std::string generationTypeToString(GenerationType gen) {
+    switch (gen) {
+        case GenerationType::Gen1: return "Generation I (Red/Blue/Yellow)";
+        case GenerationType::Gen2: return "Generation II (Gold/Silver/Crystal)";
+        case GenerationType::Gen3: return "Generation III (GBA)";
+        default:                   return "Unknown Generation";
+    }
+}
+
+// Gen I & II Stat Experience (16-bit 0..65535 per stat)
+struct StatExp {
+    uint16_t hp{0};
+    uint16_t attack{0};
+    uint16_t defense{0};
+    uint16_t speed{0};
+    uint16_t special{0};
+};
+
+// Gen I & II Determinant Values (4-bit 0..15 per stat)
+struct DVs {
+    uint8_t hp{0};
+    uint8_t attack{0};
+    uint8_t defense{0};
+    uint8_t speed{0};
+    uint8_t special{0};
+};
+
 struct CreatureEVs {
     uint8_t hp{0};
     uint8_t attack{0};
@@ -79,7 +112,7 @@ struct CreatureMove {
 };
 
 struct Creature {
-    int generation{3};
+    GenerationType generation{GenerationType::Gen3};
     uint16_t speciesId{0};
     std::string speciesName;
     std::string nickname;
@@ -87,9 +120,16 @@ struct Creature {
     uint8_t level{1};
     uint32_t experience{0};
     Pocket::Companion::GameFriendship friendship;
+    bool hasFriendship{true};
 
+    // Gen III EV/IVs
     CreatureEVs evs;
     CreatureIVs ivs;
+
+    // Gen I / II Stat Exp & DVs
+    StatExp statExp;
+    DVs dvs;
+
     CreatureNature nature{CreatureNature::Hardy};
 
     std::vector<CreatureMove> moves;
@@ -98,7 +138,7 @@ struct Creature {
 
     CreatureTrainer trainer;
     uint32_t personalityValue{0};
-    std::string location; // e.g. "Party Slot 1", "Box 1 Slot 5"
+    std::string location;
 
     bool isDerivedNature{true};
 };

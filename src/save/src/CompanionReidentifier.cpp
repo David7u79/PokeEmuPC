@@ -10,7 +10,7 @@ Pocket::Companion::CompanionLink CompanionReidentifier::createLinkFromCreature(
 ) {
     Pocket::Companion::CompanionLink link;
     link.gameId = gameId;
-    link.generation = creature.generation;
+    link.generation = static_cast<int>(creature.generation);
     link.lastVerifiedSaveHash = saveHash;
     link.status = Pocket::Companion::LinkStatus::Linked;
 

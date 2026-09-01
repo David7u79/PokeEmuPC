@@ -78,7 +78,7 @@ void Gen3SaveParser::decryptPokemonData(uint8_t* data80, uint32_t pid, uint32_t 
 
 Creature Gen3SaveParser::parsePokemonStruct(const uint8_t* raw100, const std::string& location) {
     Creature c;
-    c.generation = 3;
+    c.generation = GenerationType::Gen3;
     c.location = location;
 
     uint32_t pid = *reinterpret_cast<const uint32_t*>(raw100 + 0x00);

@@ -49,7 +49,8 @@ add_pocket_test(test_mgba_engine test_mgba_engine.cpp)
 # Save Coordination & Stability Tests
 add_pocket_test(test_save_coordination test_save_coordination.cpp)
 
-# Gen 3 Save Parser & Editor Tests
+# Gen 1, Gen 2 & Gen 3 Save Parser & Editor Tests
+add_pocket_test(test_gen1_gen2_save_parser test_gen1_gen2_save_parser.cpp)
 add_pocket_test(test_gen3_save_parser test_gen3_save_parser.cpp)
 add_pocket_test(test_gen3_save_editor test_gen3_save_editor.cpp)
 add_pocket_test(test_gen3_ev_mutation test_gen3_ev_mutation.cpp)

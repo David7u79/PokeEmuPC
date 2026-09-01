@@ -1,6 +1,8 @@
 add_library(pocket_save STATIC
     include/pocket/save/Creature.hpp
     include/pocket/save/CreatureSaveParser.hpp
+    include/pocket/save/Gen1SaveParser.hpp
+    include/pocket/save/Gen2SaveParser.hpp
     include/pocket/save/Gen3SaveParser.hpp
     include/pocket/save/CompanionReidentifier.hpp
     include/pocket/save/PendingGameReward.hpp
@@ -11,6 +13,8 @@ add_library(pocket_save STATIC
     include/pocket/save/SaveSessionCoordinator.hpp
     include/pocket/save/FileStabilityVerifier.hpp
     include/pocket/save/SaveBackupRepository.hpp
+    src/Gen1SaveParser.cpp
+    src/Gen2SaveParser.cpp
     src/Gen3SaveParser.cpp
     src/CompanionReidentifier.cpp
     src/PendingGameReward.cpp

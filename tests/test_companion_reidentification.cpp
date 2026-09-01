@@ -16,7 +16,7 @@ private:
         const std::string& location
     ) {
         Pocket::Save::Creature c;
-        c.generation = 3;
+        c.generation = Pocket::Save::GenerationType::Gen3;
         c.personalityValue = pid;
         c.speciesId = speciesId;
         c.speciesName = speciesName;

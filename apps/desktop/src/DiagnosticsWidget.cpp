@@ -6,7 +6,10 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <chrono>
+#include <QFileInfo>
 #include "pocket/save/CompanionReidentifier.hpp"
+#include "pocket/save/Gen1SaveParser.hpp"
+#include "pocket/save/Gen2SaveParser.hpp"
 
 namespace Pocket::App {
 
@@ -17,7 +20,7 @@ DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(15, 15, 15, 15);
 
-    QGroupBox *headerGroup = new QGroupBox("Developer Save File Inspector (Gen III Read-Only)", this);
+    QGroupBox *headerGroup = new QGroupBox("Developer Save File Inspector (Gen I / Gen II / Gen III)", this);
     QHBoxLayout *headerLayout = new QHBoxLayout(headerGroup);
 
     m_openFileBtn = new QPushButton("Inspect Save File (.sav)...", headerGroup);
@@ -35,7 +38,7 @@ DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
     m_activeCompanionLabel = new QLabel("Active Companion: None selected", trainerGroup);
     m_activeCompanionLabel->setStyleSheet("font-weight: bold; color: #A3BE8C;");
 
-    m_bondVsFriendshipLabel = new QLabel("App Bond (PocketPartner XP): Lv 1 | Game Friendship (Canonical): -- | IVs: Read-Only", trainerGroup);
+    m_bondVsFriendshipLabel = new QLabel("App Bond (PocketPartner XP): Lv 1 | Game Friendship: --", trainerGroup);
     m_bondVsFriendshipLabel->setStyleSheet("font-size: 11px; color: #EBCB8B; font-weight: bold;");
 
     m_selectCompanionBtn = new QPushButton("★ Set Selected Party Row as Active Desktop Companion", trainerGroup);
@@ -47,7 +50,7 @@ DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
     trainerLayout->addWidget(m_selectCompanionBtn);
 
     // Timing Bar Training Mini-Activity
-    QGroupBox *trainingGroup = new QGroupBox("Companion Training Mini-Activity (Pending EV Rewards)", this);
+    QGroupBox *trainingGroup = new QGroupBox("Companion Training Mini-Activity", this);
     QVBoxLayout *trainingLayout = new QVBoxLayout(trainingGroup);
     m_timingBarWidget = new TrainingTimingBarWidget(trainingGroup);
     trainingLayout->addWidget(m_timingBarWidget);
@@ -68,7 +71,7 @@ DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
     QVBoxLayout *partyLayout = new QVBoxLayout(partyGroup);
 
     m_partyTable = new QTableWidget(0, 8, partyGroup);
-    m_partyTable->setHorizontalHeaderLabels({"Slot", "Species", "Nickname", "Level", "Nature", "EVs (HP/Atk/Def)", "IVs (HP/Atk/Def)", "PID"});
+    m_partyTable->setHorizontalHeaderLabels({"Slot", "Species", "Nickname", "Level", "Nature / Gen", "EVs / StatExp", "IVs / DVs", "PID / ID"});
     m_partyTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_partyTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_partyTable->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -90,14 +93,29 @@ DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
 }
 
 void DiagnosticsWidget::onOpenFileClicked() {
-    QString file = QFileDialog::getOpenFileName(this, "Select Gen III Save File", "", "Save Files (*.sav *.sa1 *.bin);;All Files (*)");
+    QString file = QFileDialog::getOpenFileName(this, "Select Save File", "", "Save Files (*.sav *.sa1 *.bin);;All Files (*)");
     if (!file.isEmpty()) {
         loadAndInspectSave(file);
     }
 }
 
 void DiagnosticsWidget::loadAndInspectSave(const QString& saveFilePath) {
-    m_lastParseResult = m_parser.parseSaveFile(saveFilePath.toStdString());
+    QFileInfo info(saveFilePath);
+    qint64 size = info.size();
+
+    if (size == 32768) {
+        // Try Gen 1 first, then Gen 2
+        Pocket::Save::Gen1SaveParser gen1Parser;
+        m_lastParseResult = gen1Parser.parseSaveFile(saveFilePath.toStdString());
+
+        if (m_lastParseResult.status != Pocket::Save::SaveParseStatus::Success) {
+            Pocket::Save::Gen2SaveParser gen2Parser;
+            m_lastParseResult = gen2Parser.parseSaveFile(saveFilePath.toStdString());
+        }
+    } else {
+        // Gen III 128KB Flash
+        m_lastParseResult = m_parser.parseSaveFile(saveFilePath.toStdString());
+    }
 
     if (m_lastParseResult.status != Pocket::Save::SaveParseStatus::Success) {
         m_statusLabel->setText(QString("Failed: %1").arg(QString::fromStdString(m_lastParseResult.errorMessage)));
@@ -108,17 +126,15 @@ void DiagnosticsWidget::loadAndInspectSave(const QString& saveFilePath) {
         return;
     }
 
-    QString slotName = (m_lastParseResult.activeSlotIndex == 0) ? "Slot A (0x00000)" : "Slot B (0x0E000)";
+    QString slotName = (m_lastParseResult.activeSlotIndex == 0) ? "Slot A / Primary" : "Slot B / Backup";
     m_statusLabel->setText(QString("Active Slot: %1 | Save Counter: %2 | Checksums: VALID")
         .arg(slotName).arg(m_lastParseResult.saveCounter));
     m_statusLabel->setStyleSheet("font-weight: bold; color: #4CAF50;");
 
-    m_trainerLabel->setText(QString("Trainer: %1 (ID: %2, Secret: %3) | Play Time: %4h %5m")
+    m_trainerLabel->setText(QString("Trainer: %1 (ID: %2) | Saved Party Count: %3")
         .arg(QString::fromStdString(m_lastParseResult.trainerName))
         .arg(m_lastParseResult.trainerId)
-        .arg(m_lastParseResult.secretId)
-        .arg(m_lastParseResult.playTimeHours)
-        .arg(m_lastParseResult.playTimeMinutes));
+        .arg(m_lastParseResult.party.size()));
 
     m_partyTable->setRowCount(0);
     for (size_t i = 0; i < m_lastParseResult.party.size(); ++i) {
@@ -130,14 +146,18 @@ void DiagnosticsWidget::loadAndInspectSave(const QString& saveFilePath) {
         m_partyTable->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(pkmn.speciesName)));
         m_partyTable->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(pkmn.nickname)));
         m_partyTable->setItem(row, 3, new QTableWidgetItem(QString::number(pkmn.level)));
-        m_partyTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(Pocket::Save::natureToString(pkmn.nature))));
 
-        QString evStr = QString("%1/%2/%3").arg(pkmn.evs.hp).arg(pkmn.evs.attack).arg(pkmn.evs.defense);
-        QString ivStr = QString("%1/%2/%3").arg(pkmn.ivs.hp).arg(pkmn.ivs.attack).arg(pkmn.ivs.defense);
-
-        m_partyTable->setItem(row, 5, new QTableWidgetItem(evStr));
-        m_partyTable->setItem(row, 6, new QTableWidgetItem(ivStr));
-        m_partyTable->setItem(row, 7, new QTableWidgetItem(QString("0x%1").arg(pkmn.personalityValue, 8, 16, QChar('0')).toUpper()));
+        if (pkmn.generation == Pocket::Save::GenerationType::Gen3) {
+            m_partyTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(Pocket::Save::natureToString(pkmn.nature))));
+            m_partyTable->setItem(row, 5, new QTableWidgetItem(QString("EV: %1/%2/%3").arg(pkmn.evs.hp).arg(pkmn.evs.attack).arg(pkmn.evs.defense)));
+            m_partyTable->setItem(row, 6, new QTableWidgetItem(QString("IV: %1/%2/%3").arg(pkmn.ivs.hp).arg(pkmn.ivs.attack).arg(pkmn.ivs.defense)));
+            m_partyTable->setItem(row, 7, new QTableWidgetItem(QString("0x%1").arg(pkmn.personalityValue, 8, 16, QChar('0')).toUpper()));
+        } else {
+            m_partyTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(Pocket::Save::generationTypeToString(pkmn.generation))));
+            m_partyTable->setItem(row, 5, new QTableWidgetItem(QString("Exp: %1/%2/%3").arg(pkmn.statExp.hp).arg(pkmn.statExp.attack).arg(pkmn.statExp.defense)));
+            m_partyTable->setItem(row, 6, new QTableWidgetItem(QString("DV: %1/%2/%3").arg(pkmn.dvs.hp).arg(pkmn.dvs.attack).arg(pkmn.dvs.defense)));
+            m_partyTable->setItem(row, 7, new QTableWidgetItem(QString("ID: %1").arg(pkmn.trainer.trainerId)));
+        }
     }
 
     m_selectCompanionBtn->setEnabled(!m_lastParseResult.party.empty());
@@ -153,15 +173,18 @@ void DiagnosticsWidget::onSelectCompanionClicked() {
     const auto& selectedPkmn = m_lastParseResult.party[row];
     m_currentLink = Pocket::Save::CompanionReidentifier::createLinkFromCreature(selectedPkmn, 1, "synthetic_hash");
 
-    m_activeCompanionLabel->setText(QString("Active Companion: %1 (%2) [Level %3]")
+    m_activeCompanionLabel->setText(QString("Active Companion: %1 (%2) [Level %3] [%4]")
         .arg(QString::fromStdString(m_currentLink.nickname))
         .arg(QString::fromStdString(m_currentLink.speciesName))
-        .arg(m_currentLink.level));
+        .arg(m_currentLink.level)
+        .arg(QString::fromStdString(Pocket::Save::generationTypeToString(selectedPkmn.generation))));
 
-    m_bondVsFriendshipLabel->setText(QString("App Bond (PocketPartner XP): Lv 1 | Game Friendship (Canonical): %1 | IVs: Read-Only (HP %2/Atk %3)")
-        .arg(m_currentLink.gameFriendship)
-        .arg(selectedPkmn.ivs.hp)
-        .arg(selectedPkmn.ivs.attack));
+    if (selectedPkmn.hasFriendship) {
+        m_bondVsFriendshipLabel->setText(QString("App Bond (PocketPartner XP): Lv 1 | Game Friendship (Canonical): %1")
+            .arg(m_currentLink.gameFriendship));
+    } else {
+        m_bondVsFriendshipLabel->setText("App Bond (PocketPartner XP): Lv 1 | Game Friendship: N/A (Gen I)");
+    }
 
     // Send IPC Message to Desktop Companion Widget
     Pocket::Core::IpcMessage msg;
@@ -179,6 +202,15 @@ void DiagnosticsWidget::onTrainingCompleted(Pocket::Save::EVType stat, int evPoi
     Q_UNUSED(qualityScore);
     if (m_currentLink.gameId == 0) {
         QMessageBox::warning(this, "Training", "Please select an active companion from the party table first!");
+        return;
+    }
+
+    if (!m_lastParseResult.party.empty() && m_lastParseResult.party[0].generation != Pocket::Save::GenerationType::Gen3) {
+        QMessageBox::information(
+            this,
+            "Game-Save Training Notice",
+            "Game-save training is not yet supported for this generation (Read-Only Mode active).\nApp-only companion bond and XP progression remain fully active!"
+        );
         return;
     }
 
