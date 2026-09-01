@@ -30,3 +30,10 @@ target_link_libraries(PocketCompanion PRIVATE
     pocket_storage
     pocket_save
 )
+
+add_custom_command(TARGET PocketCompanion POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets/pokemon"
+        "$<TARGET_FILE_DIR:PocketCompanion>/assets/pokemon"
+    COMMENT "Synchronizing local Pokémon sprite assets..."
+)
