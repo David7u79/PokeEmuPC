@@ -3,12 +3,14 @@ add_library(pocket_save STATIC
     include/pocket/save/CreatureSaveParser.hpp
     include/pocket/save/Gen3SaveParser.hpp
     include/pocket/save/CompanionReidentifier.hpp
+    include/pocket/save/PendingGameReward.hpp
     include/pocket/save/SaveSessionState.hpp
     include/pocket/save/SaveSessionCoordinator.hpp
     include/pocket/save/FileStabilityVerifier.hpp
     include/pocket/save/SaveBackupRepository.hpp
     src/Gen3SaveParser.cpp
     src/CompanionReidentifier.cpp
+    src/PendingGameReward.cpp
     src/SaveSessionCoordinator.cpp
     src/SaveBackupRepository.cpp
     ${CMAKE_SOURCE_DIR}/save/src/SaveFileParser.cpp

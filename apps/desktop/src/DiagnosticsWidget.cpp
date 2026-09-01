@@ -5,6 +5,7 @@
 #include <QFileDialog>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <chrono>
 #include "pocket/save/CompanionReidentifier.hpp"
 
 namespace Pocket::App {
@@ -27,21 +28,43 @@ DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
     headerLayout->addWidget(m_statusLabel);
     headerLayout->addStretch();
 
-    QGroupBox *trainerGroup = new QGroupBox("Trainer Information & Companion Link", this);
+    QGroupBox *trainerGroup = new QGroupBox("Trainer Info & Active Companion Status", this);
     QVBoxLayout *trainerLayout = new QVBoxLayout(trainerGroup);
 
     m_trainerLabel = new QLabel("Trainer: -- | Play Time: --", trainerGroup);
     m_activeCompanionLabel = new QLabel("Active Companion: None selected", trainerGroup);
     m_activeCompanionLabel->setStyleSheet("font-weight: bold; color: #A3BE8C;");
 
-    m_selectCompanionBtn = new QPushButton("★ Set Selected Party Row as Desktop Companion", trainerGroup);
+    m_bondVsFriendshipLabel = new QLabel("App Bond (PocketPartner XP): Lv 1 | Game Friendship (Canonical): -- | IVs: Read-Only", trainerGroup);
+    m_bondVsFriendshipLabel->setStyleSheet("font-size: 11px; color: #EBCB8B; font-weight: bold;");
+
+    m_selectCompanionBtn = new QPushButton("★ Set Selected Party Row as Active Desktop Companion", trainerGroup);
     m_selectCompanionBtn->setEnabled(false);
 
     trainerLayout->addWidget(m_trainerLabel);
     trainerLayout->addWidget(m_activeCompanionLabel);
+    trainerLayout->addWidget(m_bondVsFriendshipLabel);
     trainerLayout->addWidget(m_selectCompanionBtn);
 
-    QGroupBox *partyGroup = new QGroupBox("Parsed Party Pokémon", this);
+    // Timing Bar Training Mini-Activity
+    QGroupBox *trainingGroup = new QGroupBox("Companion Training Mini-Activity (Pending EV Rewards)", this);
+    QVBoxLayout *trainingLayout = new QVBoxLayout(trainingGroup);
+    m_timingBarWidget = new TrainingTimingBarWidget(trainingGroup);
+    trainingLayout->addWidget(m_timingBarWidget);
+
+    // Pending Reward Ledger Section
+    QGroupBox *ledgerGroup = new QGroupBox("Pending Game Reward Ledger (Staged - Save Unmodified)", this);
+    QVBoxLayout *ledgerLayout = new QVBoxLayout(ledgerGroup);
+
+    m_ledgerTable = new QTableWidget(0, 5, ledgerGroup);
+    m_ledgerTable->setHorizontalHeaderLabels({"Reward ID", "Category", "Stat Target", "Points Staged", "Source Action"});
+    m_ledgerTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    m_ledgerTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    ledgerLayout->addWidget(m_ledgerTable);
+
+    // Party Table Section
+    QGroupBox *partyGroup = new QGroupBox("Parsed Party Pokémon (Read-Only Save Data)", this);
     QVBoxLayout *partyLayout = new QVBoxLayout(partyGroup);
 
     m_partyTable = new QTableWidget(0, 8, partyGroup);
@@ -55,12 +78,14 @@ DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
 
     layout->addWidget(headerGroup);
     layout->addWidget(trainerGroup);
+    layout->addWidget(trainingGroup);
+    layout->addWidget(ledgerGroup);
     layout->addWidget(partyGroup);
 
     connect(m_openFileBtn, &QPushButton::clicked, this, &DiagnosticsWidget::onOpenFileClicked);
     connect(m_selectCompanionBtn, &QPushButton::clicked, this, &DiagnosticsWidget::onSelectCompanionClicked);
+    connect(m_timingBarWidget, &TrainingTimingBarWidget::trainingCompleted, this, &DiagnosticsWidget::onTrainingCompleted);
 
-    // Start IPC server for desktop companion communication
     m_ipcServer.start();
 }
 
@@ -133,6 +158,11 @@ void DiagnosticsWidget::onSelectCompanionClicked() {
         .arg(QString::fromStdString(m_currentLink.speciesName))
         .arg(m_currentLink.level));
 
+    m_bondVsFriendshipLabel->setText(QString("App Bond (PocketPartner XP): Lv 1 | Game Friendship (Canonical): %1 | IVs: Read-Only (HP %2/Atk %3)")
+        .arg(m_currentLink.gameFriendship)
+        .arg(selectedPkmn.ivs.hp)
+        .arg(selectedPkmn.ivs.attack));
+
     // Send IPC Message to Desktop Companion Widget
     Pocket::Core::IpcMessage msg;
     msg.command = Pocket::Core::IpcCommandType::CompanionStatusChanged;
@@ -143,6 +173,50 @@ void DiagnosticsWidget::onSelectCompanionClicked() {
     msg.payload["linkStatus"] = QString::fromStdString(Pocket::Companion::linkStatusToString(m_currentLink.status));
 
     m_ipcServer.broadcastMessage(msg);
+}
+
+void DiagnosticsWidget::onTrainingCompleted(Pocket::Save::EVType stat, int evPoints, double qualityScore) {
+    Q_UNUSED(qualityScore);
+    if (m_currentLink.gameId == 0) {
+        QMessageBox::warning(this, "Training", "Please select an active companion from the party table first!");
+        return;
+    }
+
+    if (evPoints <= 0) return;
+
+    auto now = std::chrono::system_clock::now();
+    uint64_t nowSecs = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+
+    Pocket::Save::PendingGameReward reward;
+    reward.companionLinkId = m_currentLink.gameId;
+    reward.category = Pocket::Save::RewardCategory::EV;
+    reward.evStat = stat;
+    reward.amount = evPoints;
+    reward.timestamp = nowSecs;
+    reward.sourceAction = "Train_TimingBar";
+
+    std::string reason;
+    if (m_ledger.recordReward(reward, reason)) {
+        refreshLedgerDisplay();
+    } else {
+        QMessageBox::warning(this, "Training Reward Blocked", QString::fromStdString(reason));
+    }
+}
+
+void DiagnosticsWidget::refreshLedgerDisplay() {
+    auto rewards = m_ledger.getPendingRewards(m_currentLink.gameId);
+    m_ledgerTable->setRowCount(0);
+
+    for (const auto& r : rewards) {
+        int row = m_ledgerTable->rowCount();
+        m_ledgerTable->insertRow(row);
+
+        m_ledgerTable->setItem(row, 0, new QTableWidgetItem(QString::number(r.rewardId)));
+        m_ledgerTable->setItem(row, 1, new QTableWidgetItem("EV Reward"));
+        m_ledgerTable->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(Pocket::Save::evTypeToString(r.evStat))));
+        m_ledgerTable->setItem(row, 3, new QTableWidgetItem(QString("+%1 EV").arg(r.amount)));
+        m_ledgerTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(r.sourceAction)));
+    }
 }
 
 } // namespace Pocket::App

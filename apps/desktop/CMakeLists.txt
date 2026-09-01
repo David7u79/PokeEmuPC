@@ -5,12 +5,14 @@ add_executable(PocketPartner
     include/SettingsWidget.hpp
     include/EmulatorWidget.hpp
     include/DiagnosticsWidget.hpp
+    include/TrainingTimingBarWidget.hpp
     src/MainWindow.cpp
     src/LibraryWidget.cpp
     src/CompanionWidget.cpp
     src/SettingsWidget.cpp
     src/EmulatorWidget.cpp
     src/DiagnosticsWidget.cpp
+    src/TrainingTimingBarWidget.cpp
     src/main.cpp
 )
 

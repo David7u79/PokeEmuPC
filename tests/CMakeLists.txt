@@ -4,6 +4,7 @@ macro(add_pocket_test name src)
     add_executable(${name} ${src})
     target_include_directories(${name} PRIVATE
         ${CMAKE_SOURCE_DIR}/apps/companion/include
+        ${CMAKE_SOURCE_DIR}/apps/desktop/include
     )
     target_link_libraries(${name} PRIVATE
         Qt6::Core
@@ -53,6 +54,9 @@ add_pocket_test(test_gen3_save_parser test_gen3_save_parser.cpp)
 
 # Companion Re-identification Tests
 add_pocket_test(test_companion_reidentification test_companion_reidentification.cpp)
+
+# Training Ledger & Anti-Abuse Rules Tests
+add_pocket_test(test_training_ledger test_training_ledger.cpp)
 
 # Framerate Policy Tests
 add_executable(test_framerate_policy
