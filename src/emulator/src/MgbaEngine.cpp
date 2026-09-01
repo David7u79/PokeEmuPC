@@ -1,4 +1,5 @@
 #include "pocket/emulator/MgbaEngine.hpp"
+#include "pocket/core/GameSystem.hpp"
 #include <QDebug>
 #include <fstream>
 #include <chrono>
@@ -204,7 +205,14 @@ void MgbaEngine::executionLoop() {
     using clock = std::chrono::steady_clock;
     auto targetInterval = std::chrono::microseconds(16666); // ~60 FPS
 
-    std::vector<uint8_t> dummyFrame(240 * 160 * 4, 0x1F); // Blue tint fallback test pattern
+    // Extension-based system resolution calculation (GB/GBC: 160x144, GBA: 240x160)
+    auto systemOpt = Pocket::Core::GameSystemUtils::detectFromExtension(m_romPath);
+    Pocket::Core::GameSystem system = systemOpt.value_or(Pocket::Core::GameSystem::GBA);
+
+    int width = (system == Pocket::Core::GameSystem::GBA) ? 240 : 160;
+    int height = (system == Pocket::Core::GameSystem::GBA) ? 160 : 144;
+
+    std::vector<uint8_t> dummyFrame(static_cast<size_t>(width * height * 4), 0x1F);
 
     while (m_running) {
         auto startTime = clock::now();
@@ -215,7 +223,7 @@ void MgbaEngine::executionLoop() {
             } else {
                 // Fallback frame renderer for test environment without core DLL
                 if (m_videoCallback) {
-                    m_videoCallback(dummyFrame.data(), 240, 160, 240 * 4);
+                    m_videoCallback(dummyFrame.data(), width, height, static_cast<size_t>(width * 4));
                 }
             }
         }

@@ -39,3 +39,6 @@ add_pocket_test(test_companion_simulation test_companion_simulation.cpp)
 
 # Emulator Engine Tests
 add_pocket_test(test_mgba_engine test_mgba_engine.cpp)
+
+# Save Coordination & Stability Tests
+add_pocket_test(test_save_coordination test_save_coordination.cpp)
