@@ -43,6 +43,12 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     mainLayout->addWidget(m_statusLabel);
 
     connect(m_addButton, &QPushButton::clicked, this, &LibraryWidget::onAddGameClicked);
+    connect(m_table, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem* item) {
+        if (!item || !m_repo) return;
+        const auto games = m_repo->getAllGames();
+        const int row = item->row();
+        if (row >= 0 && row < static_cast<int>(games.size())) emit gameSelected(games[static_cast<size_t>(row)]);
+    });
 
     refreshLibrary();
 }

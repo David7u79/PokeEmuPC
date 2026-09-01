@@ -42,51 +42,24 @@ private slots:
         QCOMPARE(verifySave.size(), static_cast<size_t>(17));
     }
 
-    void testMgbaEngineLifecycleAndInput() {
-        QTemporaryDir tempDir;
-        QVERIFY(tempDir.isValid());
-        QString dummyRomPath = tempDir.path() + "/test_homebrew.gba";
-
-        // Create a minimal 128-byte dummy GBA header file for testing
-        std::ofstream file(dummyRomPath.toStdString(), std::ios::binary);
-        std::vector<char> dummyHeader(128, 0);
-        file.write(dummyHeader.data(), dummyHeader.size());
-        file.close();
-
+    void testNoCoreLifecycle() {
         Pocket::Emulator::MgbaEngine engine;
-        QVERIFY(engine.loadRom(dummyRomPath.toStdString()));
-
-        bool frameReceived = false;
-        engine.setVideoFrameCallback([&frameReceived](const uint8_t*, int w, int h, size_t) {
-            if (w == 240 && h == 160) {
-                frameReceived = true;
-            }
-        });
-
-        engine.start();
-        QVERIFY(engine.isRunning());
-        QVERIFY(!engine.isPaused());
-
-        // Test sending button events
-        engine.sendButtonEvent(Pocket::Emulator::EmulatorButton::A, true);
-        engine.sendButtonEvent(Pocket::Emulator::EmulatorButton::Start, true);
-
-        // Wait for frame execution loop
-        QTest::qWait(100);
-        QVERIFY(frameReceived);
-
-        engine.pause();
-        QVERIFY(engine.isPaused());
-
-        engine.resume();
-        QVERIFY(!engine.isPaused());
-
-        // Extract persistent save
-        Pocket::Emulator::PersistentGameSave save = engine.getPersistentSave();
-        QVERIFY(!save.isEmpty());
-
-        engine.stop();
+        QVERIFY(!engine.hasCore());
+        QVERIFY(!engine.loadRom("missing.gba"));
         QVERIFY(!engine.isRunning());
+    }
+
+    void testMissingCoreReportsError() {
+        Pocket::Emulator::MgbaEngine engine("not-a-real-core.dll");
+        QVERIFY(!engine.hasCore());
+        QVERIFY(!engine.coreError().empty());
+    }
+
+    void testEnvironmentHandler() {
+        Pocket::Emulator::MgbaEngine engine;
+        retro_pixel_format format = RETRO_PIXEL_FORMAT_XRGB8888;
+        QVERIFY(engine.handleEnvironment(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format));
+        QVERIFY(!engine.handleEnvironment(9999, nullptr));
     }
 };
 

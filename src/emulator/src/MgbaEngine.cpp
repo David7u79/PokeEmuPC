@@ -1,8 +1,12 @@
 #include "pocket/emulator/MgbaEngine.hpp"
 #include "pocket/core/GameSystem.hpp"
 #include <QDebug>
+#include <QFileInfo>
+#include <QStandardPaths>
 #include <fstream>
 #include <chrono>
+#include <cstring>
+#include <type_traits>
 
 namespace Pocket::Emulator {
 
@@ -21,6 +25,19 @@ static size_t globalAudioCallback(const int16_t *data, size_t frames) {
     return frames;
 }
 
+static void globalAudioSampleCallback(int16_t left, int16_t right) {
+    const int16_t sample[] = {left, right};
+    if (s_currentEngine) {
+        s_currentEngine->onAudioSampleBatch(sample, 1);
+    }
+}
+
+static void globalInputPollCallback() {}
+
+static bool globalEnvironmentCallback(unsigned cmd, void* data) {
+    return s_currentEngine ? s_currentEngine->handleEnvironment(cmd, data) : false;
+}
+
 static int16_t globalInputCallback(unsigned port, unsigned device, unsigned index, unsigned id) {
     if (s_currentEngine) {
         return s_currentEngine->onInputState(port, device, index, id);
@@ -31,34 +48,63 @@ static int16_t globalInputCallback(unsigned port, unsigned device, unsigned inde
 MgbaEngine::MgbaEngine(const std::string& coreLibraryPath)
     : m_coreLibraryPath(coreLibraryPath) {
     m_buttonStates.fill(false);
-
-    if (!coreLibraryPath.empty()) {
-        m_library.setFileName(QString::fromStdString(coreLibraryPath));
-        if (m_library.load()) {
-            m_retro_init = reinterpret_cast<decltype(m_retro_init)>(m_library.resolve("retro_init"));
-            m_retro_deinit = reinterpret_cast<decltype(m_retro_deinit)>(m_library.resolve("retro_deinit"));
-            m_retro_load_game = reinterpret_cast<decltype(m_retro_load_game)>(m_library.resolve("retro_load_game"));
-            m_retro_unload_game = reinterpret_cast<decltype(m_retro_unload_game)>(m_library.resolve("retro_unload_game"));
-            m_retro_run = reinterpret_cast<decltype(m_retro_run)>(m_library.resolve("retro_run"));
-            m_retro_get_memory_data = reinterpret_cast<decltype(m_retro_get_memory_data)>(m_library.resolve("retro_get_memory_data"));
-            m_retro_get_memory_size = reinterpret_cast<decltype(m_retro_get_memory_size)>(m_library.resolve("retro_get_memory_size"));
-            m_retro_set_video_refresh = reinterpret_cast<decltype(m_retro_set_video_refresh)>(m_library.resolve("retro_set_video_refresh"));
-            m_retro_set_audio_sample_batch = reinterpret_cast<decltype(m_retro_set_audio_sample_batch)>(m_library.resolve("retro_set_audio_sample_batch"));
-            m_retro_set_input_state = reinterpret_cast<decltype(m_retro_set_input_state)>(m_library.resolve("retro_set_input_state"));
-
-            if (m_retro_init) {
-                m_retro_init();
-            }
-            if (m_retro_set_video_refresh) m_retro_set_video_refresh(globalVideoCallback);
-            if (m_retro_set_audio_sample_batch) m_retro_set_audio_sample_batch(globalAudioCallback);
-            if (m_retro_set_input_state) m_retro_set_input_state(globalInputCallback);
-        }
+    if (coreLibraryPath.empty()) {
+        m_coreError = "core library path is empty";
+        return;
     }
+
+    const QFileInfo coreFile(QString::fromStdString(coreLibraryPath));
+    if (!coreFile.exists()) {
+        m_coreError = "core library not found: " + coreLibraryPath;
+        return;
+    }
+    m_coreDirectory = coreFile.absolutePath().toStdString();
+    m_library.setFileName(coreFile.absoluteFilePath());
+    if (!m_library.load()) {
+        m_coreError = "could not load core library: " + m_library.errorString().toStdString();
+        return;
+    }
+
+    auto resolve = [this](auto& function, const char* name) {
+        function = reinterpret_cast<std::remove_reference_t<decltype(function)>>(m_library.resolve(name));
+        if (!function && m_coreError.empty()) {
+            m_coreError = std::string("missing symbol ") + name;
+        }
+    };
+    resolve(m_retro_set_environment, "retro_set_environment");
+    resolve(m_retro_init, "retro_init");
+    resolve(m_retro_deinit, "retro_deinit");
+    resolve(m_retro_load_game, "retro_load_game");
+    resolve(m_retro_unload_game, "retro_unload_game");
+    resolve(m_retro_run, "retro_run");
+    resolve(m_retro_get_memory_data, "retro_get_memory_data");
+    resolve(m_retro_get_memory_size, "retro_get_memory_size");
+    resolve(m_retro_set_video_refresh, "retro_set_video_refresh");
+    resolve(m_retro_set_audio_sample, "retro_set_audio_sample");
+    resolve(m_retro_set_audio_sample_batch, "retro_set_audio_sample_batch");
+    resolve(m_retro_set_input_poll, "retro_set_input_poll");
+    resolve(m_retro_set_input_state, "retro_set_input_state");
+    resolve(m_retro_get_system_av_info, "retro_get_system_av_info");
+    resolve(m_retro_set_controller_port_device, "retro_set_controller_port_device");
+    if (!m_coreError.empty()) {
+        m_library.unload();
+        return;
+    }
+
+    s_currentEngine = this;
+    m_retro_set_environment(globalEnvironmentCallback);
+    m_retro_init();
+    m_retro_set_video_refresh(globalVideoCallback);
+    m_retro_set_audio_sample(globalAudioSampleCallback);
+    m_retro_set_audio_sample_batch(globalAudioCallback);
+    m_retro_set_input_poll(globalInputPollCallback);
+    m_retro_set_input_state(globalInputCallback);
+    m_hasCore = true;
 }
 
 MgbaEngine::~MgbaEngine() {
     stop();
-    if (m_retro_deinit) {
+    if (m_hasCore && m_retro_deinit) {
         m_retro_deinit();
     }
     if (m_library.isLoaded()) {
@@ -67,6 +113,7 @@ MgbaEngine::~MgbaEngine() {
 }
 
 bool MgbaEngine::loadRom(const std::string& romPath) {
+    if (!m_hasCore) return false;
     m_romPath = romPath;
     std::ifstream file(romPath, std::ios::binary | std::ios::ate);
     if (!file.is_open()) return false;
@@ -78,21 +125,21 @@ bool MgbaEngine::loadRom(const std::string& romPath) {
     m_romBuffer.resize(static_cast<size_t>(size));
     if (!file.read(reinterpret_cast<char*>(m_romBuffer.data()), size)) return false;
 
-    if (m_retro_load_game) {
-        struct retro_game_info info{};
-        info.path = m_romPath.c_str();
-        info.data = m_romBuffer.data();
-        info.size = m_romBuffer.size();
-        return m_retro_load_game(&info);
-    }
-
-    // Default 64KB SRAM allocation for testing if no external core DLL is loaded
-    m_sramBuffer.resize(65536, 0xFF);
+    retro_game_info info{};
+    info.path = m_romPath.c_str();
+    info.data = m_romBuffer.data();
+    info.size = m_romBuffer.size();
+    if (!m_retro_load_game(&info)) return false;
+    m_gameLoaded = true;
+    retro_system_av_info avInfo{};
+    m_retro_get_system_av_info(&avInfo);
+    if (avInfo.timing.fps > 0.0) m_fps = avInfo.timing.fps;
+    m_retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
     return true;
 }
 
 void MgbaEngine::start() {
-    if (m_running) return;
+    if (!m_hasCore || !m_gameLoaded || m_running) return;
     s_currentEngine = this;
     m_running = true;
     m_paused = false;
@@ -115,8 +162,9 @@ void MgbaEngine::stop() {
     if (s_currentEngine == this) {
         s_currentEngine = nullptr;
     }
-    if (m_retro_unload_game) {
+    if (m_gameLoaded && m_retro_unload_game) {
         m_retro_unload_game();
+        m_gameLoaded = false;
     }
 }
 
@@ -167,7 +215,26 @@ bool MgbaEngine::loadPersistentSave(const PersistentGameSave& save) {
 
 void MgbaEngine::onVideoFrame(const void *data, unsigned width, unsigned height, size_t pitch) {
     if (m_videoCallback && data && width > 0 && height > 0) {
-        m_videoCallback(reinterpret_cast<const uint8_t*>(data), static_cast<int>(width), static_cast<int>(height), pitch);
+        if (m_pixelFormat == RETRO_PIXEL_FORMAT_RGB565 || m_pixelFormat == RETRO_PIXEL_FORMAT_0RGB1555) {
+            std::vector<uint8_t> converted(static_cast<size_t>(width) * height * 4U);
+            const auto* source = reinterpret_cast<const uint8_t*>(data);
+            for (unsigned y = 0; y < height; ++y) {
+                const auto* row = reinterpret_cast<const uint16_t*>(source + static_cast<size_t>(y) * pitch);
+                auto* target = reinterpret_cast<uint32_t*>(converted.data() + static_cast<size_t>(y) * width * 4U);
+                for (unsigned x = 0; x < width; ++x) {
+                    const uint16_t pixel = row[x];
+                    const uint32_t r = ((pixel >> 11U) & 0x1fU) << 3U;
+                    const uint32_t g = m_pixelFormat == RETRO_PIXEL_FORMAT_RGB565
+                        ? ((pixel >> 5U) & 0x3fU) << 2U
+                        : ((pixel >> 5U) & 0x1fU) << 3U;
+                    const uint32_t b = (pixel & 0x1fU) << 3U;
+                    target[x] = (r << 16U) | (g << 8U) | b;
+                }
+            }
+            m_videoCallback(converted.data(), static_cast<int>(width), static_cast<int>(height), static_cast<size_t>(width) * 4U);
+        } else {
+            m_videoCallback(reinterpret_cast<const uint8_t*>(data), static_cast<int>(width), static_cast<int>(height), pitch);
+        }
     }
 }
 
@@ -203,35 +270,55 @@ int16_t MgbaEngine::onInputState(unsigned, unsigned, unsigned, unsigned id) {
 
 void MgbaEngine::executionLoop() {
     using clock = std::chrono::steady_clock;
-    auto targetInterval = std::chrono::microseconds(16666); // ~60 FPS
-
-    // Extension-based system resolution calculation (GB/GBC: 160x144, GBA: 240x160)
-    auto systemOpt = Pocket::Core::GameSystemUtils::detectFromExtension(m_romPath);
-    Pocket::Core::GameSystem system = systemOpt.value_or(Pocket::Core::GameSystem::GBA);
-
-    int width = (system == Pocket::Core::GameSystem::GBA) ? 240 : 160;
-    int height = (system == Pocket::Core::GameSystem::GBA) ? 160 : 144;
-
-    std::vector<uint8_t> dummyFrame(static_cast<size_t>(width * height * 4), 0x1F);
+    const auto targetInterval = std::chrono::microseconds(static_cast<long long>(1000000.0 / m_fps));
 
     while (m_running) {
         auto startTime = clock::now();
 
         if (!m_paused) {
-            if (m_retro_run) {
-                m_retro_run();
-            } else {
-                // Fallback frame renderer for test environment without core DLL
-                if (m_videoCallback) {
-                    m_videoCallback(dummyFrame.data(), width, height, static_cast<size_t>(width * 4));
-                }
-            }
+            m_retro_run();
         }
 
         auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - startTime);
         if (elapsed < targetInterval) {
             std::this_thread::sleep_for(targetInterval - elapsed);
         }
+    }
+}
+
+bool MgbaEngine::handleEnvironment(unsigned cmd, void* data) {
+    switch (cmd) {
+    case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
+        if (!data) return false;
+        if (*static_cast<const retro_pixel_format*>(data) == RETRO_PIXEL_FORMAT_XRGB8888 ||
+            *static_cast<const retro_pixel_format*>(data) == RETRO_PIXEL_FORMAT_RGB565 ||
+            *static_cast<const retro_pixel_format*>(data) == RETRO_PIXEL_FORMAT_0RGB1555) {
+            m_pixelFormat = *static_cast<const retro_pixel_format*>(data);
+            return true;
+        }
+        return false;
+    case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
+    case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
+        if (!data) return false;
+        if (m_coreDirectory.empty()) m_coreDirectory = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation).toStdString();
+        *static_cast<const char**>(data) = m_coreDirectory.c_str();
+        return true;
+    case RETRO_ENVIRONMENT_GET_CAN_DUPE:
+        if (!data) return false;
+        *static_cast<bool*>(data) = true;
+        return true;
+    case RETRO_ENVIRONMENT_GET_VARIABLE:
+        if (!data) return false;
+        static_cast<retro_variable*>(data)->value = nullptr;
+        return true;
+    case RETRO_ENVIRONMENT_SET_VARIABLES:
+        return true;
+    case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
+        if (!data) return false;
+        *static_cast<bool*>(data) = false;
+        return true;
+    default:
+        return false;
     }
 }
 

@@ -5,6 +5,11 @@
 #include <QGroupBox>
 #include <QSqlDatabase>
 #include <QComboBox>
+#include <QFileDialog>
+#include <QFile>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QSettings>
 
 namespace Pocket::App {
 
@@ -34,6 +39,20 @@ SettingsWidget::SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseM
     syncForm->addRow("Sync Safety Policy:", syncModeLabel);
     syncForm->addRow("", safetyNote);
 
+    m_corePathEdit = new QLineEdit(syncGroup);
+    m_corePathEdit->setReadOnly(true);
+    auto *browseButton = new QPushButton("Browse...", syncGroup);
+    auto *corePathLayout = new QHBoxLayout();
+    corePathLayout->addWidget(m_corePathEdit);
+    corePathLayout->addWidget(browseButton);
+    syncForm->addRow("mGBA libretro core:", corePathLayout);
+    m_coreStatusLabel = new QLabel(syncGroup);
+    syncForm->addRow("", m_coreStatusLabel);
+    QSettings settings("PocketPartnerProject", "PocketPartner");
+    m_corePathEdit->setText(settings.value("emulator/mgbaCorePath").toString());
+    updateCoreStatus(m_corePathEdit->text());
+    connect(browseButton, &QPushButton::clicked, this, &SettingsWidget::browseCoreLibrary);
+
     mainLayout->addWidget(syncGroup);
 
     QGroupBox *dbGroup = new QGroupBox("Database Engine", this);
@@ -51,6 +70,27 @@ SettingsWidget::SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseM
 
     mainLayout->addWidget(dbGroup);
     mainLayout->addStretch();
+}
+
+void SettingsWidget::browseCoreLibrary() {
+#ifdef Q_OS_WIN
+    const QString filter = "Libretro core (*.dll);;All files (*.*)";
+#else
+    const QString filter = "Libretro core (*.so);;All files (*.*)";
+#endif
+    const QString path = QFileDialog::getOpenFileName(this, "Select mGBA libretro core", m_corePathEdit->text(), filter);
+    if (path.isEmpty()) return;
+    m_corePathEdit->setText(path);
+    QSettings settings("PocketPartnerProject", "PocketPartner");
+    settings.setValue("emulator/mgbaCorePath", path);
+    updateCoreStatus(path);
+    emit coreLibraryPathChanged(path);
+}
+
+void SettingsWidget::updateCoreStatus(const QString& path) {
+    const bool found = !path.isEmpty() && QFile::exists(path);
+    m_coreStatusLabel->setText(found ? "Core found" : "Core not set — download mgba_libretro.dll");
+    m_coreStatusLabel->setStyleSheet(found ? "color: green;" : "color: red;");
 }
 
 } // namespace Pocket::App

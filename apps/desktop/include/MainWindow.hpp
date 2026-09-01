@@ -9,6 +9,7 @@
 #include "CompanionWidget.hpp"
 #include "SettingsWidget.hpp"
 #include "DiagnosticsWidget.hpp"
+#include "EmulatorWidget.hpp"
 
 namespace Pocket::App {
 
@@ -25,6 +26,7 @@ private:
     CompanionWidget *m_companionWidget{nullptr};
     SettingsWidget *m_settingsWidget{nullptr};
     DiagnosticsWidget *m_diagnosticsWidget{nullptr};
+    EmulatorWidget *m_emulatorWidget{nullptr};
 };
 
 } // namespace Pocket::App

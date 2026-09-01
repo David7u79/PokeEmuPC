@@ -81,6 +81,7 @@ void EmulatorWidget::closeAudio() {
 
 bool EmulatorWidget::loadAndStartRom(const QString& romPath, const QString& savePath) {
     stopEmulator();
+    m_statusMessage.clear();
 
     m_savePath = savePath;
     if (m_savePath.isEmpty()) {
@@ -88,7 +89,12 @@ bool EmulatorWidget::loadAndStartRom(const QString& romPath, const QString& save
         m_savePath = info.absolutePath() + "/" + info.completeBaseName() + ".sav";
     }
 
-    m_engine = std::make_unique<Pocket::Emulator::MgbaEngine>();
+    m_engine = std::make_unique<Pocket::Emulator::MgbaEngine>(m_coreLibraryPath.toStdString());
+    if (!m_engine->hasCore()) {
+        m_statusMessage = QString::fromStdString(m_engine->coreError());
+        update();
+        return false;
+    }
 
     // Load existing persistent cartridge save if present
     Pocket::Emulator::PersistentGameSave save;
@@ -97,7 +103,8 @@ bool EmulatorWidget::loadAndStartRom(const QString& romPath, const QString& save
     }
 
     if (!m_engine->loadRom(romPath.toStdString())) {
-        qWarning() << "Failed to load ROM at" << romPath;
+        m_statusMessage = "Failed to load ROM";
+        update();
         return false;
     }
 
@@ -118,6 +125,16 @@ bool EmulatorWidget::loadAndStartRom(const QString& romPath, const QString& save
     return true;
 }
 
+void EmulatorWidget::setCoreLibraryPath(const QString& path) {
+    m_coreLibraryPath = path;
+}
+
+void EmulatorWidget::setStatusMessage(const QString& message) {
+    stopEmulator();
+    m_statusMessage = message;
+    update();
+}
+
 void EmulatorWidget::stopEmulator() {
     if (m_engine) {
         // Save persistent cartridge save before stopping
@@ -134,6 +151,7 @@ void EmulatorWidget::stopEmulator() {
 
     std::lock_guard<std::mutex> lock(m_frameMutex);
     m_currentFrame = QImage();
+    if (m_statusMessage.isEmpty()) m_statusMessage = "No ROM loaded";
     update();
 }
 
@@ -151,7 +169,7 @@ void EmulatorWidget::paintEvent(QPaintEvent *) {
     } else {
         painter.fillRect(rect(), Qt::black);
         painter.setPen(Qt::white);
-        painter.drawText(rect(), Qt::AlignCenter, "No GBA ROM Loaded");
+        painter.drawText(rect(), Qt::AlignCenter, m_statusMessage);
     }
 }
 

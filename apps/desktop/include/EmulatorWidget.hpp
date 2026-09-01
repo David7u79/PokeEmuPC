@@ -23,6 +23,8 @@ public:
 
     bool loadAndStartRom(const QString& romPath, const QString& savePath = "");
     void stopEmulator();
+    void setCoreLibraryPath(const QString& path);
+    void setStatusMessage(const QString& message);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -42,6 +44,8 @@ private:
     QImage m_currentFrame;
     std::mutex m_frameMutex;
     QString m_savePath;
+    QString m_coreLibraryPath;
+    QString m_statusMessage{"No ROM loaded"};
 
 #ifdef _WIN32
     HWAVEOUT m_waveOut{nullptr};

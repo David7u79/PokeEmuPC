@@ -2,6 +2,7 @@ add_executable(PocketPartner
     include/MainWindow.hpp
     include/LibraryWidget.hpp
     include/SettingsWidget.hpp
+    include/EmulatorWidget.hpp
     include/DiagnosticsWidget.hpp
     include/TrainingTimingBarWidget.hpp
     include/NdsDisplayWidget.hpp
@@ -10,6 +11,7 @@ add_executable(PocketPartner
     src/MainWindow.cpp
     src/LibraryWidget.cpp
     src/SettingsWidget.cpp
+    src/EmulatorWidget.cpp
     src/DiagnosticsWidget.cpp
     src/TrainingTimingBarWidget.cpp
     src/NdsDisplayWidget.cpp
@@ -37,5 +39,5 @@ target_link_libraries(PocketPartner PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(PocketPartner PRIVATE dwmapi)
+    target_link_libraries(PocketPartner PRIVATE dwmapi winmm)
 endif()
