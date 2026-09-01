@@ -36,3 +36,6 @@ add_pocket_test(test_graceful_shutdown test_graceful_shutdown.cpp)
 
 # Companion Simulation Engine Tests
 add_pocket_test(test_companion_simulation test_companion_simulation.cpp)
+
+# Emulator Engine Tests
+add_pocket_test(test_mgba_engine test_mgba_engine.cpp)
