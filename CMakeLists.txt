@@ -15,7 +15,7 @@ if(NOT Qt6_DIR AND EXISTS "C:/Qt/6.7.2/msvc2019_64")
     list(APPEND CMAKE_PREFIX_PATH "C:/Qt/6.7.2/msvc2019_64")
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Test)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network Test)
 
 # Compiler flags
 if(MSVC)

@@ -5,6 +5,7 @@ macro(add_pocket_test name src)
     target_link_libraries(${name} PRIVATE
         Qt6::Core
         Qt6::Test
+        Qt6::Network
         pocket_core
         pocket_storage
         pocket_emulator_api
@@ -24,3 +25,11 @@ add_pocket_test(test_companion_link test_companion_link.cpp)
 add_pocket_test(test_save_safety test_save_safety.cpp)
 add_pocket_test(test_companion_state test_companion_state.cpp)
 add_pocket_test(test_framerate_policy test_framerate_policy.cpp)
+
+# New IPC & Process Architecture Tests
+add_pocket_test(test_ipc_connection test_ipc_connection.cpp)
+add_pocket_test(test_ipc_reconnect test_ipc_reconnect.cpp)
+add_pocket_test(test_main_app_absent test_main_app_absent.cpp)
+add_pocket_test(test_companion_absent test_companion_absent.cpp)
+add_pocket_test(test_simultaneous_db_read test_simultaneous_db_read.cpp)
+add_pocket_test(test_graceful_shutdown test_graceful_shutdown.cpp)

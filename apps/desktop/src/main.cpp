@@ -7,6 +7,7 @@
 #include "pocketpartner/storage/DatabaseManager.hpp"
 #include "pocket/storage/SchemaMigration.hpp"
 #include "pocket/storage/GameRepository.hpp"
+#include "pocket/core/IpcServer.hpp"
 
 int main(int argc, char *argv[]) {
     QElapsedTimer startupTimer;
@@ -41,11 +42,26 @@ int main(int argc, char *argv[]) {
     // Initialize Game Repository
     auto gameRepo = std::make_shared<Pocket::Storage::GameRepository>(dbManager);
 
+    // Initialize IPC Server
+    auto ipcServer = std::make_shared<Pocket::Core::IpcServer>("PocketPartner_IPC_Pipe");
+    if (!ipcServer->start()) {
+        qWarning() << "Warning: Could not start IPC Server pipe.";
+    }
+
     qint64 startupTimeMs = startupTimer.elapsed();
     qInfo() << "PocketPartner cold startup time:" << startupTimeMs << "ms";
 
     Pocket::App::MainWindow mainWindow(dbManager, gameRepo);
     mainWindow.show();
+
+    // Listen for IPC messages from PocketCompanion.exe
+    QObject::connect(ipcServer.get(), &Pocket::Core::IpcServer::messageReceived, [&mainWindow](QLocalSocket*, const Pocket::Core::IpcMessage& msg) {
+        if (msg.command == Pocket::Core::IpcCommandType::OpenMainApplication) {
+            mainWindow.showNormal();
+            mainWindow.activateWindow();
+            mainWindow.raise();
+        }
+    });
 
     return app.exec();
 }
