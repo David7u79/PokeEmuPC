@@ -15,11 +15,3 @@ target_link_libraries(PocketPartnerDesktopCompanion PUBLIC
     PocketPartnerCompanion
     PocketPartnerStorage
 )
-
-add_executable(PocketCompanion
-    src/main.cpp
-)
-
-target_link_libraries(PocketCompanion PRIVATE
-    PocketPartnerDesktopCompanion
-)

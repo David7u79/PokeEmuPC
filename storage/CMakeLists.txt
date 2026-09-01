@@ -4,6 +4,7 @@ add_library(PocketPartnerStorage STATIC
 
 target_include_directories(PocketPartnerStorage PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src/storage/include
 )
 
 target_link_libraries(PocketPartnerStorage PUBLIC

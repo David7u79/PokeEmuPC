@@ -24,14 +24,23 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Subdirectories
+# Core & Subsystem Libraries
 add_subdirectory(storage)
 add_subdirectory(core)
 add_subdirectory(emulator)
 add_subdirectory(save)
 add_subdirectory(companion)
 add_subdirectory(desktop_companion)
-add_subdirectory(app)
+
+add_subdirectory(src/core)
+add_subdirectory(src/emulator)
+add_subdirectory(src/storage)
+add_subdirectory(src/save)
+add_subdirectory(src/companion)
+
+# Applications
+add_subdirectory(apps/desktop)
+add_subdirectory(apps/companion)
 
 enable_testing()
 add_subdirectory(tests)
