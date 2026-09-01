@@ -45,6 +45,28 @@ add_pocket_test(test_companion_simulation test_companion_simulation.cpp)
 
 # Emulator Engine Tests
 add_pocket_test(test_mgba_engine test_mgba_engine.cpp)
+add_executable(test_melonds_engine
+    test_melonds_engine.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/NdsDisplayWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/NdsDisplayWidget.cpp
+)
+target_include_directories(test_melonds_engine PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include
+)
+target_link_libraries(test_melonds_engine PRIVATE
+    Qt6::Core
+    Qt6::Test
+    Qt6::Widgets
+    pocket_core
+    pocket_storage
+    pocket_emulator_api
+    pocket_save
+    pocket_companion_core
+)
+add_test(NAME test_melonds_engine COMMAND test_melonds_engine)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_melonds_engine PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+endif()
 
 # Save Coordination & Stability Tests
 add_pocket_test(test_save_coordination test_save_coordination.cpp)
