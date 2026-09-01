@@ -10,6 +10,8 @@
 #include "pocket/save/CompanionReidentifier.hpp"
 #include "pocket/save/Gen1SaveParser.hpp"
 #include "pocket/save/Gen2SaveParser.hpp"
+#include "pocket/save/Gen4SaveParser.hpp"
+#include "pocket/save/Gen5SaveParser.hpp"
 
 namespace Pocket::App {
 
@@ -20,7 +22,7 @@ DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(15, 15, 15, 15);
 
-    QGroupBox *headerGroup = new QGroupBox("Developer Save File Inspector (Gen I / Gen II / Gen III)", this);
+    QGroupBox *headerGroup = new QGroupBox("Developer Save File Inspector (Gen I - Gen V)", this);
     QHBoxLayout *headerLayout = new QHBoxLayout(headerGroup);
 
     m_openFileBtn = new QPushButton("Inspect Save File (.sav)...", headerGroup);
@@ -112,6 +114,15 @@ void DiagnosticsWidget::loadAndInspectSave(const QString& saveFilePath) {
             Pocket::Save::Gen2SaveParser gen2Parser;
             m_lastParseResult = gen2Parser.parseSaveFile(saveFilePath.toStdString());
         }
+    } else if (size == 524288) {
+        // Try Gen 4 first, then Gen 5
+        Pocket::Save::Gen4SaveParser gen4Parser;
+        m_lastParseResult = gen4Parser.parseSaveFile(saveFilePath.toStdString());
+
+        if (m_lastParseResult.status != Pocket::Save::SaveParseStatus::Success) {
+            Pocket::Save::Gen5SaveParser gen5Parser;
+            m_lastParseResult = gen5Parser.parseSaveFile(saveFilePath.toStdString());
+        }
     } else {
         // Gen III 128KB Flash
         m_lastParseResult = m_parser.parseSaveFile(saveFilePath.toStdString());
@@ -147,7 +158,7 @@ void DiagnosticsWidget::loadAndInspectSave(const QString& saveFilePath) {
         m_partyTable->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(pkmn.nickname)));
         m_partyTable->setItem(row, 3, new QTableWidgetItem(QString::number(pkmn.level)));
 
-        if (pkmn.generation == Pocket::Save::GenerationType::Gen3) {
+        if (pkmn.generation >= Pocket::Save::GenerationType::Gen3) {
             m_partyTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(Pocket::Save::natureToString(pkmn.nature))));
             m_partyTable->setItem(row, 5, new QTableWidgetItem(QString("EV: %1/%2/%3").arg(pkmn.evs.hp).arg(pkmn.evs.attack).arg(pkmn.evs.defense)));
             m_partyTable->setItem(row, 6, new QTableWidgetItem(QString("IV: %1/%2/%3").arg(pkmn.ivs.hp).arg(pkmn.ivs.attack).arg(pkmn.ivs.defense)));

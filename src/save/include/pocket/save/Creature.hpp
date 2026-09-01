@@ -10,7 +10,9 @@ namespace Pocket::Save {
 enum class GenerationType {
     Gen1 = 1,
     Gen2 = 2,
-    Gen3 = 3
+    Gen3 = 3,
+    Gen4 = 4,
+    Gen5 = 5
 };
 
 inline std::string generationTypeToString(GenerationType gen) {
@@ -18,6 +20,8 @@ inline std::string generationTypeToString(GenerationType gen) {
         case GenerationType::Gen1: return "Generation I (Red/Blue/Yellow)";
         case GenerationType::Gen2: return "Generation II (Gold/Silver/Crystal)";
         case GenerationType::Gen3: return "Generation III (GBA)";
+        case GenerationType::Gen4: return "Generation IV (NDS)";
+        case GenerationType::Gen5: return "Generation V (NDS)";
         default:                   return "Unknown Generation";
     }
 }
@@ -122,7 +126,7 @@ struct Creature {
     Pocket::Companion::GameFriendship friendship;
     bool hasFriendship{true};
 
-    // Gen III EV/IVs
+    // Gen III / IV / V EVs & IVs
     CreatureEVs evs;
     CreatureIVs ivs;
 
