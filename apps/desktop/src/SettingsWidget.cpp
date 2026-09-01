@@ -4,6 +4,7 @@
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QSqlDatabase>
+#include <QComboBox>
 
 namespace Pocket::App {
 
@@ -12,8 +13,28 @@ SettingsWidget::SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseM
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
-    QLabel *headerLabel = new QLabel("<h2>Application Settings & Diagnostics</h2>", this);
+    QLabel *headerLabel = new QLabel("<h2>Application Settings & Synchronization</h2>", this);
     mainLayout->addWidget(headerLabel);
+
+    QGroupBox *syncGroup = new QGroupBox("Emulator & Save File Source Settings", this);
+    QFormLayout *syncForm = new QFormLayout(syncGroup);
+
+    QComboBox *sourceCombo = new QComboBox(syncGroup);
+    sourceCombo->addItem("Internal Emulator (mGBA Core)");
+    sourceCombo->addItem("External Save File (.sav Watcher)");
+
+    QLabel *syncModeLabel = new QLabel("External Save: Read-only synchronization active", syncGroup);
+    syncModeLabel->setStyleSheet("font-weight: bold; color: #88C0D0;");
+
+    QLabel *safetyNote = new QLabel("Note: Read-only synchronization keeps desktop companion status updated without risking external save file corruption.", syncGroup);
+    safetyNote->setWordWrap(true);
+    safetyNote->setStyleSheet("font-size: 11px; color: #D8DEE9;");
+
+    syncForm->addRow("Default Game Source:", sourceCombo);
+    syncForm->addRow("Sync Safety Policy:", syncModeLabel);
+    syncForm->addRow("", safetyNote);
+
+    mainLayout->addWidget(syncGroup);
 
     QGroupBox *dbGroup = new QGroupBox("Database Engine", this);
     QFormLayout *formLayout = new QFormLayout(dbGroup);

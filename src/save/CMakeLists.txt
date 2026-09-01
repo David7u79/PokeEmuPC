@@ -6,6 +6,7 @@ add_library(pocket_save STATIC
     include/pocket/save/PendingGameReward.hpp
     include/pocket/save/CreatureSaveEditor.hpp
     include/pocket/save/Gen3SaveEditor.hpp
+    include/pocket/save/ExternalSaveWatcher.hpp
     include/pocket/save/SaveSessionState.hpp
     include/pocket/save/SaveSessionCoordinator.hpp
     include/pocket/save/FileStabilityVerifier.hpp
@@ -14,6 +15,7 @@ add_library(pocket_save STATIC
     src/CompanionReidentifier.cpp
     src/PendingGameReward.cpp
     src/Gen3SaveEditor.cpp
+    src/ExternalSaveWatcher.cpp
     src/SaveSessionCoordinator.cpp
     src/SaveBackupRepository.cpp
     ${CMAKE_SOURCE_DIR}/save/src/SaveFileParser.cpp

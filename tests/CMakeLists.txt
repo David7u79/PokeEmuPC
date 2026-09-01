@@ -54,6 +54,9 @@ add_pocket_test(test_gen3_save_parser test_gen3_save_parser.cpp)
 add_pocket_test(test_gen3_save_editor test_gen3_save_editor.cpp)
 add_pocket_test(test_gen3_ev_mutation test_gen3_ev_mutation.cpp)
 
+# External Save Watcher Tests
+add_pocket_test(test_external_save_watcher test_external_save_watcher.cpp)
+
 # Companion Re-identification Tests
 add_pocket_test(test_companion_reidentification test_companion_reidentification.cpp)
 
