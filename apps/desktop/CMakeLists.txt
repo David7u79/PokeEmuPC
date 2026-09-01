@@ -4,11 +4,13 @@ add_executable(PocketPartner
     include/CompanionWidget.hpp
     include/SettingsWidget.hpp
     include/EmulatorWidget.hpp
+    include/DiagnosticsWidget.hpp
     src/MainWindow.cpp
     src/LibraryWidget.cpp
     src/CompanionWidget.cpp
     src/SettingsWidget.cpp
     src/EmulatorWidget.cpp
+    src/DiagnosticsWidget.cpp
     src/main.cpp
 )
 

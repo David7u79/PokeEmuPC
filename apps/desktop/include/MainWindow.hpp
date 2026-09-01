@@ -8,24 +8,23 @@
 #include "LibraryWidget.hpp"
 #include "CompanionWidget.hpp"
 #include "SettingsWidget.hpp"
+#include "DiagnosticsWidget.hpp"
 
 namespace Pocket::App {
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    explicit MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager,
-                        std::shared_ptr<Storage::GameRepository> gameRepo,
-                        QWidget *parent = nullptr);
+    MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager,
+               std::shared_ptr<Pocket::Storage::GameRepository> gameRepo,
+               QWidget *parent = nullptr);
 
 private:
-    std::shared_ptr<PocketPartner::Storage::DatabaseManager> m_dbManager;
-    std::shared_ptr<Storage::GameRepository> m_gameRepo;
-
     QTabWidget *m_tabWidget{nullptr};
-    LibraryWidget *m_libraryPage{nullptr};
-    CompanionWidget *m_companionPage{nullptr};
-    SettingsWidget *m_settingsPage{nullptr};
+    LibraryWidget *m_libraryWidget{nullptr};
+    CompanionWidget *m_companionWidget{nullptr};
+    SettingsWidget *m_settingsWidget{nullptr};
+    DiagnosticsWidget *m_diagnosticsWidget{nullptr};
 };
 
 } // namespace Pocket::App

@@ -14,6 +14,9 @@ macro(add_pocket_test name src)
         PocketPartnerDesktopCompanion
     )
     add_test(NAME ${name} COMMAND ${name})
+    if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+        set_tests_properties(${name} PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+    endif()
 endmacro()
 
 add_pocket_test(test_game_system test_game_system.cpp)
@@ -42,3 +45,6 @@ add_pocket_test(test_mgba_engine test_mgba_engine.cpp)
 
 # Save Coordination & Stability Tests
 add_pocket_test(test_save_coordination test_save_coordination.cpp)
+
+# Gen 3 Save Parser Tests
+add_pocket_test(test_gen3_save_parser test_gen3_save_parser.cpp)
