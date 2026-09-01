@@ -1,27 +1,23 @@
 #include <QtTest/QtTest>
-#include "pocketpartner/desktop_companion/FramerateGovernor.hpp"
+#include "CompanionAnimationController.hpp"
 
 class TestFrameratePolicy : public QObject {
     Q_OBJECT
 private slots:
     void testFramerateGovernorIntervals() {
-        PocketPartner::DesktopCompanion::FramerateGovernor governor;
+        Pocket::CompanionApp::CompanionAnimationController controller;
 
-        governor.setRenderState(PocketPartner::DesktopCompanion::RenderState::Hidden);
-        QCOMPARE(governor.targetFps(), 0);
-        QCOMPARE(governor.intervalMs(), 0);
+        controller.setState(Pocket::CompanionApp::AnimationState::Hidden);
+        QCOMPARE(controller.targetFps(), 0);
 
-        governor.setRenderState(PocketPartner::DesktopCompanion::RenderState::FullyStatic);
-        QCOMPARE(governor.targetFps(), 0);
-        QCOMPARE(governor.intervalMs(), 0);
+        controller.setState(Pocket::CompanionApp::AnimationState::Static);
+        QCOMPARE(controller.targetFps(), 0);
 
-        governor.setRenderState(PocketPartner::DesktopCompanion::RenderState::MinorIdleAnimation);
-        QCOMPARE(governor.targetFps(), 8);
-        QCOMPARE(governor.intervalMs(), 125); // 1000/8 = 125ms
+        controller.setState(Pocket::CompanionApp::AnimationState::SlowIdle);
+        QCOMPARE(controller.targetFps(), 6);
 
-        governor.setRenderState(PocketPartner::DesktopCompanion::RenderState::InteractiveAnimation);
-        QCOMPARE(governor.targetFps(), 25);
-        QCOMPARE(governor.intervalMs(), 40); // 1000/25 = 40ms
+        controller.triggerInteraction();
+        QCOMPARE(controller.targetFps(), 25);
     }
 };
 

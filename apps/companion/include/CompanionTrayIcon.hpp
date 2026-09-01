@@ -5,6 +5,7 @@
 #include <QAction>
 #include <memory>
 #include "DesktopWidget.hpp"
+#include "CompanionStartupManager.hpp"
 #include "pocket/core/IpcClient.hpp"
 
 namespace Pocket::CompanionApp {
@@ -19,8 +20,14 @@ public:
 
 private slots:
     void onOpenMainApp();
+    void onOpenGame();
+    void onTrain();
+    void onFeed();
+    void onRest();
+    void onStats();
     void onToggleVisibility();
     void onToggleAlwaysOnTop(bool checked);
+    void onToggleAutostart(bool checked);
     void onExit();
 
 private:
@@ -30,8 +37,14 @@ private:
     QMenu *m_menu{nullptr};
 
     QAction *m_openAppAction{nullptr};
+    QAction *m_openGameAction{nullptr};
+    QAction *m_trainAction{nullptr};
+    QAction *m_feedAction{nullptr};
+    QAction *m_restAction{nullptr};
+    QAction *m_statsAction{nullptr};
     QAction *m_toggleVisAction{nullptr};
     QAction *m_alwaysOnTopAction{nullptr};
+    QAction *m_autostartAction{nullptr};
     QAction *m_exitAction{nullptr};
 };
 

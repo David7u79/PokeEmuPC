@@ -14,14 +14,26 @@ CompanionTrayIcon::CompanionTrayIcon(Pocket::Companion::DesktopWidget *widget, s
     m_menu = new QMenu();
 
     m_openAppAction = m_menu->addAction("Open PocketPartner", this, &CompanionTrayIcon::onOpenMainApp);
+    m_openGameAction = m_menu->addAction("🎮 Open Game", this, &CompanionTrayIcon::onOpenGame);
     m_menu->addSeparator();
 
-    m_toggleVisAction = m_menu->addAction("Hide Companion", this, &CompanionTrayIcon::onToggleVisibility);
+    m_trainAction = m_menu->addAction("Train Partner", this, &CompanionTrayIcon::onTrain);
+    m_feedAction  = m_menu->addAction("Feed Partner", this, &CompanionTrayIcon::onFeed);
+    m_restAction  = m_menu->addAction("Rest Partner", this, &CompanionTrayIcon::onRest);
+    m_statsAction = m_menu->addAction("Stats", this, &CompanionTrayIcon::onStats);
+    m_menu->addSeparator();
 
     m_alwaysOnTopAction = m_menu->addAction("Always on Top");
     m_alwaysOnTopAction->setCheckable(true);
     m_alwaysOnTopAction->setChecked(m_widget && (m_widget->windowFlags() & Qt::WindowStaysOnTopHint));
     connect(m_alwaysOnTopAction, &QAction::toggled, this, &CompanionTrayIcon::onToggleAlwaysOnTop);
+
+    m_autostartAction = m_menu->addAction("Start Companion with Windows");
+    m_autostartAction->setCheckable(true);
+    m_autostartAction->setChecked(CompanionStartupManager::isAutostartEnabled());
+    connect(m_autostartAction, &QAction::toggled, this, &CompanionTrayIcon::onToggleAutostart);
+
+    m_toggleVisAction = m_menu->addAction("Hide Companion", this, &CompanionTrayIcon::onToggleVisibility);
 
     m_menu->addSeparator();
     m_exitAction = m_menu->addAction("Exit", this, &CompanionTrayIcon::onExit);
@@ -54,10 +66,29 @@ void CompanionTrayIcon::onOpenMainApp() {
         msg.command = Core::IpcCommandType::OpenMainApplication;
         m_ipcClient->sendMessage(msg);
     } else {
-        // If PocketPartner.exe is not running, launch process executable directly
         QString mainAppPath = QCoreApplication::applicationDirPath() + "/PocketPartner.exe";
         QProcess::startDetached(mainAppPath, {});
     }
+}
+
+void CompanionTrayIcon::onOpenGame() {
+    onOpenMainApp();
+}
+
+void CompanionTrayIcon::onTrain() {
+    if (m_widget) m_widget->show();
+}
+
+void CompanionTrayIcon::onFeed() {
+    if (m_widget) m_widget->show();
+}
+
+void CompanionTrayIcon::onRest() {
+    if (m_widget) m_widget->show();
+}
+
+void CompanionTrayIcon::onStats() {
+    if (m_widget) m_widget->show();
 }
 
 void CompanionTrayIcon::onToggleVisibility() {
@@ -77,6 +108,10 @@ void CompanionTrayIcon::onToggleAlwaysOnTop(bool checked) {
         m_widget->setWindowFlag(Qt::WindowStaysOnTopHint, checked);
         m_widget->show();
     }
+}
+
+void CompanionTrayIcon::onToggleAutostart(bool checked) {
+    CompanionStartupManager::setAutostartEnabled(checked);
 }
 
 void CompanionTrayIcon::onExit() {
