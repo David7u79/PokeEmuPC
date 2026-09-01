@@ -5,6 +5,7 @@
 #include <cstdint>
 #include "pocket/companion/CompanionLink.hpp"
 #include "pocket/save/CreatureSaveParser.hpp"
+#include "pocket/save/PendingGameReward.hpp"
 
 namespace Pocket::Save {
 
@@ -16,7 +17,8 @@ enum class EditorStatus {
     CreatureAmbiguous,
     ChecksumRepairFailed,
     AtomicWriteFailed,
-    SemanticDiffFailed
+    SemanticDiffFailed,
+    CapExceededNoGain
 };
 
 inline std::string editorStatusToString(EditorStatus status) {
@@ -29,6 +31,7 @@ inline std::string editorStatusToString(EditorStatus status) {
         case EditorStatus::ChecksumRepairFailed: return "Checksum Repair Failed";
         case EditorStatus::AtomicWriteFailed:    return "Atomic File Write Failed";
         case EditorStatus::SemanticDiffFailed:   return "Semantic Diff Verification Failed";
+        case EditorStatus::CapExceededNoGain:    return "EV Cap Exceeded (No Gain Applied)";
         default:                                 return "Unknown Error";
     }
 }
@@ -39,7 +42,14 @@ struct MutationAudit {
     uint8_t oldFriendship{0};
     uint8_t newFriendship{0};
 
-    size_t bytesModified{0}; // Should be exactly 3 bytes (1 friendship + 2 section checksum)
+    EVType evStat{EVType::Attack};
+    uint8_t oldEvValue{0};
+    uint8_t newEvValue{0};
+    int requestedEvAmount{0};
+    int appliedEvAmount{0};
+    int remainingEvAmount{0};
+
+    size_t bytesModified{0};
     size_t unrelatedFieldsChanged{0}; // Should be 0
     bool isVerified{false};
     std::string backupFilePath;
@@ -60,6 +70,13 @@ public:
         const std::string& saveFilePath,
         const Pocket::Companion::CompanionLink& targetLink,
         uint8_t newFriendshipValue
+    ) = 0;
+
+    virtual MutationResult mutateEV(
+        const std::string& saveFilePath,
+        const Pocket::Companion::CompanionLink& targetLink,
+        EVType evStat,
+        int requestedEvAmount
     ) = 0;
 };
 

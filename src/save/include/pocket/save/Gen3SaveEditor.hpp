@@ -21,6 +21,13 @@ public:
         uint8_t newFriendshipValue
     ) override;
 
+    MutationResult mutateEV(
+        const std::string& saveFilePath,
+        const Pocket::Companion::CompanionLink& targetLink,
+        EVType evStat,
+        int requestedEvAmount
+    ) override;
+
     static std::string calculateSha256(const std::vector<uint8_t>& buffer);
 
 private:
