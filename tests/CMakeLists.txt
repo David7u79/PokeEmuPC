@@ -48,3 +48,6 @@ add_pocket_test(test_save_coordination test_save_coordination.cpp)
 
 # Gen 3 Save Parser Tests
 add_pocket_test(test_gen3_save_parser test_gen3_save_parser.cpp)
+
+# Companion Re-identification Tests
+add_pocket_test(test_companion_reidentification test_companion_reidentification.cpp)

@@ -2,66 +2,73 @@
 
 #include <QWidget>
 #include <QLabel>
-#include <QProgressBar>
 #include <QPushButton>
-#include <QMouseEvent>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QTimer>
+#include <QPoint>
 #include <memory>
-#include "pocket/core/IpcClient.hpp"
+#include "pocket/companion/CompanionState.hpp"
 #include "pocket/companion/CompanionSimulator.hpp"
-#include "pocketpartner/desktop_companion/FramerateGovernor.hpp"
+#include "pocket/companion/IClock.hpp"
+#include "pocket/companion/CompanionLink.hpp"
+#include "pocket/core/IpcClient.hpp"
 
-namespace Pocket::CompanionApp {
+namespace Pocket::Companion {
 
 class DesktopWidget : public QWidget {
     Q_OBJECT
 public:
-    explicit DesktopWidget(std::shared_ptr<Core::IpcClient> ipcClient, QWidget *parent = nullptr);
+    explicit DesktopWidget(QWidget *parent = nullptr);
+    ~DesktopWidget() override = default;
 
-    void setAlwaysOnTop(bool onTop);
-    bool isAlwaysOnTop() const { return m_alwaysOnTop; }
-
-    void refreshStateDisplay();
+    void updateCanonicalInfo(const QString& nickname, const QString& species, int level, int friendship, const QString& linkStatus);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
-    void paintEvent(QPaintEvent *event) override;
 
 private slots:
     void onFeedClicked();
     void onPetClicked();
     void onPlayClicked();
     void onRestClicked();
-    void onToggleDetails();
+    void toggleExpandedView();
+    void refreshUi();
+    void onIpcMessageReceived(const Pocket::Core::IpcMessage& message);
 
 private:
-    std::shared_ptr<Core::IpcClient> m_ipcClient;
+    bool m_isDragging{false};
     QPoint m_dragPosition;
-    bool m_alwaysOnTop{true};
-    bool m_detailsExpanded{false};
+    bool m_isExpanded{false};
 
-    Pocket::Companion::CompanionSimulator m_simulator;
-    Pocket::Companion::CompanionState m_state;
+    std::shared_ptr<SystemClock> m_clock;
+    CompanionSimulator m_simulator;
+    CompanionState m_state;
 
-    QLabel *m_nameLabel{nullptr};
-    QLabel *m_levelLabel{nullptr};
+    Pocket::Core::IpcClient m_ipcClient;
+
+    // Canonical Game State Labels
+    QLabel *m_nicknameLabel{nullptr};
+    QLabel *m_canonicalMetaLabel{nullptr};
+    QLabel *m_linkStatusLabel{nullptr};
+
+    // App-Only State Labels
+    QLabel *m_hungerLabel{nullptr};
+    QLabel *m_moodLabel{nullptr};
+    QLabel *m_energyLabel{nullptr};
     QLabel *m_bondLabel{nullptr};
 
-    QProgressBar *m_hungerBar{nullptr};
-    QProgressBar *m_moodBar{nullptr};
-    QProgressBar *m_energyBar{nullptr};
-
-    QWidget *m_buttonContainer{nullptr};
+    // Action Buttons
     QPushButton *m_feedBtn{nullptr};
     QPushButton *m_petBtn{nullptr};
     QPushButton *m_playBtn{nullptr};
     QPushButton *m_restBtn{nullptr};
-    QPushButton *m_detailsBtn{nullptr};
+    QPushButton *m_expandBtn{nullptr};
 
-    QLabel *m_detailsLabel{nullptr};
-
-    PocketPartner::DesktopCompanion::FramerateGovernor m_governor;
+    QWidget *m_expandedContainer{nullptr};
+    QTimer *m_uiTimer{nullptr};
 };
 
-} // namespace Pocket::CompanionApp
+} // namespace Pocket::Companion

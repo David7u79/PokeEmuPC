@@ -8,7 +8,7 @@
 
 namespace Pocket::CompanionApp {
 
-CompanionTrayIcon::CompanionTrayIcon(DesktopWidget *widget, std::shared_ptr<Core::IpcClient> ipcClient, QObject *parent)
+CompanionTrayIcon::CompanionTrayIcon(Pocket::Companion::DesktopWidget *widget, std::shared_ptr<Core::IpcClient> ipcClient, QObject *parent)
     : QObject(parent), m_widget(widget), m_ipcClient(std::move(ipcClient)) {
 
     m_menu = new QMenu();
@@ -20,7 +20,7 @@ CompanionTrayIcon::CompanionTrayIcon(DesktopWidget *widget, std::shared_ptr<Core
 
     m_alwaysOnTopAction = m_menu->addAction("Always on Top");
     m_alwaysOnTopAction->setCheckable(true);
-    m_alwaysOnTopAction->setChecked(m_widget->isAlwaysOnTop());
+    m_alwaysOnTopAction->setChecked(m_widget && (m_widget->windowFlags() & Qt::WindowStaysOnTopHint));
     connect(m_alwaysOnTopAction, &QAction::toggled, this, &CompanionTrayIcon::onToggleAlwaysOnTop);
 
     m_menu->addSeparator();
@@ -74,7 +74,8 @@ void CompanionTrayIcon::onToggleVisibility() {
 
 void CompanionTrayIcon::onToggleAlwaysOnTop(bool checked) {
     if (m_widget) {
-        m_widget->setAlwaysOnTop(checked);
+        m_widget->setWindowFlag(Qt::WindowStaysOnTopHint, checked);
+        m_widget->show();
     }
 }
 

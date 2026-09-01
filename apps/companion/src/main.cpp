@@ -11,11 +11,11 @@ int main(int argc, char *argv[]) {
     app.setQuitOnLastWindowClosed(false); // Closing overlay window keeps system tray icon running
 
     // Initialize IPC Client
-    auto ipcClient = std::make_shared<Pocket::Core::IpcClient>("PocketPartner_IPC_Pipe");
+    auto ipcClient = std::make_shared<Pocket::Core::IpcClient>("PocketPartnerIPC");
     ipcClient->connectToServer();
 
     // Initialize Companion Overlay Widget & System Tray Icon
-    auto *widget = new Pocket::CompanionApp::DesktopWidget(ipcClient);
+    auto *widget = new Pocket::Companion::DesktopWidget();
     widget->show();
 
     auto *trayIcon = new Pocket::CompanionApp::CompanionTrayIcon(widget, ipcClient);

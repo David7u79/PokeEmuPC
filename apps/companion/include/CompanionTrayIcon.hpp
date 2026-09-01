@@ -12,7 +12,7 @@ namespace Pocket::CompanionApp {
 class CompanionTrayIcon : public QObject {
     Q_OBJECT
 public:
-    CompanionTrayIcon(DesktopWidget *widget, std::shared_ptr<Core::IpcClient> ipcClient, QObject *parent = nullptr);
+    CompanionTrayIcon(Pocket::Companion::DesktopWidget *widget, std::shared_ptr<Core::IpcClient> ipcClient, QObject *parent = nullptr);
     ~CompanionTrayIcon() override = default;
 
     void show();
@@ -24,7 +24,7 @@ private slots:
     void onExit();
 
 private:
-    DesktopWidget *m_widget{nullptr};
+    Pocket::Companion::DesktopWidget *m_widget{nullptr};
     std::shared_ptr<Core::IpcClient> m_ipcClient;
     QSystemTrayIcon *m_trayIcon{nullptr};
     QMenu *m_menu{nullptr};
