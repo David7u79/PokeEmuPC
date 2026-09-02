@@ -19,7 +19,9 @@ enum class EmulatorButton {
     L,
     R,
     Start,
-    Select
+    Select,
+    X,
+    Y
 };
 
 class EmulatorEngine {

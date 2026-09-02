@@ -15,7 +15,7 @@ if(NOT Qt6_DIR AND EXISTS "C:/Qt/6.7.2/msvc2019_64")
     list(APPEND CMAKE_PREFIX_PATH "C:/Qt/6.7.2/msvc2019_64")
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network Test)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network Test Svg SvgWidgets)
 
 # Compiler flags
 if(MSVC)
@@ -37,6 +37,7 @@ add_subdirectory(src/emulator)
 add_subdirectory(src/storage)
 add_subdirectory(src/save)
 add_subdirectory(src/companion)
+add_subdirectory(src/input)
 
 # Applications
 add_subdirectory(apps/desktop)

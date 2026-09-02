@@ -16,6 +16,7 @@ macro(add_pocket_test name src)
         pocket_emulator_api
         pocket_save
         pocket_companion_core
+        pocket_input
     )
     add_test(NAME ${name} COMMAND ${name})
     if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
@@ -73,6 +74,9 @@ add_test(NAME test_melonds_engine COMMAND test_melonds_engine)
 if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_melonds_engine PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
+
+add_pocket_test(test_controller_layout test_controller_layout.cpp)
+add_pocket_test(test_controller_mapping test_controller_mapping.cpp)
 
 # Save Coordination & Stability Tests
 add_pocket_test(test_save_coordination test_save_coordination.cpp)
