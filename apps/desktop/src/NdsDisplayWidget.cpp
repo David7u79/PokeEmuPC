@@ -4,6 +4,7 @@
 
 #include <QMouseEvent>
 #include <QPainter>
+#include <QSettings>
 #include <cstring>
 
 namespace Pocket::App {
@@ -15,8 +16,8 @@ NdsDisplayWidget::NdsDisplayWidget(QWidget* parent)
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(256, 384);
     m_hintOverlay.setSystem(QStringLiteral("NDS"));
-    m_hintTimer.setSingleShot(true);
-    connect(&m_hintTimer, &QTimer::timeout, this, [this] { setHintsVisible(false); });
+    QSettings settings("PocketPartnerProject", "PocketPartner");
+    m_hintsVisible = settings.value("emulator/showControlHints", true).toBool();
 }
 
 void NdsDisplayWidget::setLayoutMode(NdsScreenLayout mode) {
@@ -127,6 +128,9 @@ void NdsDisplayWidget::setHintsVisible(bool visible) {
     if (m_hintsVisible == visible)
         return;
     m_hintsVisible = visible;
+    // Remembered, so the choice survives closing the app.
+    QSettings settings("PocketPartnerProject", "PocketPartner");
+    settings.setValue("emulator/showControlHints", visible);
     update();
 }
 
@@ -181,8 +185,6 @@ void NdsDisplayWidget::keyReleaseEvent(QKeyEvent* event) {
 
 void NdsDisplayWidget::showEvent(QShowEvent* event) {
     m_framesEnabled.store(true, std::memory_order_relaxed);
-    setHintsVisible(true);
-    m_hintTimer.start(4000);
     QWidget::showEvent(event);
 }
 

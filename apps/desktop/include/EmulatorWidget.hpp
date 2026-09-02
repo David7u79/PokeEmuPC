@@ -55,8 +55,7 @@ private:
     QString m_controllerSystem{"GBA"};
     QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
     ControllerHintOverlay m_hintOverlay;
-    QTimer m_hintTimer;
-    bool m_hintsVisible{false};
+    bool m_hintsVisible{true};
 
     AudioSink m_audioSink;
 };

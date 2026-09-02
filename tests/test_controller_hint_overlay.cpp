@@ -114,19 +114,26 @@ private slots:
 
     void emulatorWidgetTogglesHintsWithF1()
     {
+        // Hints stay up until the player turns them off: a legend that vanishes
+        // on a timer is gone exactly when someone is still working out the keys.
         Pocket::App::EmulatorWidget widget;
-        QVERIFY(!widget.hintsVisible());
+        const bool initial = widget.hintsVisible();
+
         widget.toggleHints();
-        QVERIFY(widget.hintsVisible());
+        QCOMPARE(widget.hintsVisible(), !initial);
         widget.toggleHints();
-        QVERIFY(!widget.hintsVisible());
+        QCOMPARE(widget.hintsVisible(), initial);
 
         widget.show();
         QVERIFY(QTest::qWaitForWindowExposed(&widget));
         QTest::keyClick(&widget, Qt::Key_F1);
-        QVERIFY(widget.hintsVisible());
+        QCOMPARE(widget.hintsVisible(), !initial);
         QTest::keyClick(&widget, Qt::Key_F1);
-        QVERIFY(!widget.hintsVisible());
+        QCOMPARE(widget.hintsVisible(), initial);
+
+        // Nothing hides them on its own.
+        QTest::qWait(250);
+        QCOMPARE(widget.hintsVisible(), initial);
     }
 };
 

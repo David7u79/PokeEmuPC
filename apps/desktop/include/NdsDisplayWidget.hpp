@@ -64,8 +64,7 @@ private:
     std::shared_ptr<Pocket::Input::ControllerMapping> m_mapping;
     QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
     ControllerHintOverlay m_hintOverlay;
-    QTimer m_hintTimer;
-    bool m_hintsVisible{false};
+    bool m_hintsVisible{true};
 
     QRect m_currentTopRect;
     QRect m_currentBottomRect;

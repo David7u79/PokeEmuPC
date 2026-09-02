@@ -3,6 +3,7 @@
 #include <QPainter>
 #include <QDebug>
 #include <QFileInfo>
+#include <QSettings>
 #include <cstring>
 
 namespace Pocket::App {
@@ -11,8 +12,8 @@ EmulatorWidget::EmulatorWidget(QWidget* parent) : QWidget(parent) {
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(480, 320); // 2x scale GBA 240x160 resolution
     m_hintOverlay.setSystem(m_controllerSystem);
-    m_hintTimer.setSingleShot(true);
-    connect(&m_hintTimer, &QTimer::timeout, this, [this] { setHintsVisible(false); });
+    QSettings settings("PocketPartnerProject", "PocketPartner");
+    m_hintsVisible = settings.value("emulator/showControlHints", true).toBool();
 }
 
 EmulatorWidget::~EmulatorWidget() {
@@ -63,8 +64,6 @@ bool EmulatorWidget::loadAndStartRom(const QString& romPath, const QString& save
         [this](const int16_t* samples, size_t frames) { m_audioSink.submit(samples, frames); });
 
     m_engine->start();
-    setHintsVisible(true);
-    m_hintTimer.start(4000);
     return true;
 }
 
@@ -148,6 +147,9 @@ void EmulatorWidget::setHintsVisible(bool visible) {
     if (m_hintsVisible == visible)
         return;
     m_hintsVisible = visible;
+    // Remembered, so the choice survives closing the app.
+    QSettings settings("PocketPartnerProject", "PocketPartner");
+    settings.setValue("emulator/showControlHints", visible);
     update();
 }
 
