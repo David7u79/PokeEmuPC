@@ -27,6 +27,7 @@ public:
     bool isPaused() const override { return m_paused; }
     bool hasCore() const { return m_hasCore; }
     std::string coreError() const { return m_coreError; }
+    double sampleRate() const { return m_sampleRate; }
 
     void sendButtonEvent(EmulatorButton button, bool pressed) override;
 
@@ -57,6 +58,7 @@ private:
     std::string m_coreDirectory;
     std::atomic<int> m_pixelFormat{RETRO_PIXEL_FORMAT_XRGB8888};
     double m_fps{59.7275};
+    double m_sampleRate{32768.0};
     std::thread m_executionThread;
 
     VideoFrameCallback m_videoCallback;

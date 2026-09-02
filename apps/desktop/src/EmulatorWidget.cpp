@@ -2,6 +2,7 @@
 #include <QPainter>
 #include <QDebug>
 #include <QFileInfo>
+#include <cstring>
 
 namespace Pocket::App {
 
@@ -9,7 +10,6 @@ EmulatorWidget::EmulatorWidget(QWidget *parent)
     : QWidget(parent) {
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(480, 320); // 2x scale GBA 240x160 resolution
-    initAudio();
 }
 
 EmulatorWidget::~EmulatorWidget() {
@@ -17,19 +17,20 @@ EmulatorWidget::~EmulatorWidget() {
     closeAudio();
 }
 
-void EmulatorWidget::initAudio() {
+void EmulatorWidget::initAudio(int sampleRate) {
 #ifdef _WIN32
     WAVEFORMATEX wfx{};
     wfx.wFormatTag = WAVE_FORMAT_PCM;
     wfx.nChannels = 2;
-    wfx.nSamplesPerSec = 44100;
+    wfx.nSamplesPerSec = static_cast<DWORD>(sampleRate);
     wfx.wBitsPerSample = 16;
     wfx.nBlockAlign = wfx.nChannels * (wfx.wBitsPerSample / 8);
     wfx.nAvgBytesPerSec = wfx.nSamplesPerSec * wfx.nBlockAlign;
 
     if (waveOutOpen(&m_waveOut, WAVE_MAPPER, &wfx, 0, 0, CALLBACK_NULL) == MMSYSERR_NOERROR) {
         m_audioInitialized = true;
-        for (int i = 0; i < 4; ++i) {
+        m_currentBufferIndex = 0;
+        for (int i = 0; i < 8; ++i) {
             m_audioBuffers[i].resize(4096, 0);
             std::memset(&m_waveHeaders[i], 0, sizeof(WAVEHDR));
             m_waveHeaders[i].lpData = reinterpret_cast<LPSTR>(m_audioBuffers[i].data());
@@ -45,21 +46,22 @@ void EmulatorWidget::writeAudioSamples(const int16_t* samples, size_t frames) {
     if (!m_audioInitialized || !m_waveOut || !samples || frames == 0) return;
 
     WAVEHDR& hdr = m_waveHeaders[m_currentBufferIndex];
-    if (hdr.dwFlags & WHDR_PREPARED) {
-        waveOutUnprepareHeader(m_waveOut, &hdr, sizeof(WAVEHDR));
+    if ((hdr.dwFlags & WHDR_INQUEUE) && !(hdr.dwFlags & WHDR_DONE)) {
+        return;
     }
 
     size_t sampleCount = frames * 2; // stereo
-    m_audioBuffers[m_currentBufferIndex].assign(samples, samples + sampleCount);
+    auto& buffer = m_audioBuffers[m_currentBufferIndex];
+    if (buffer.size() != sampleCount) {
+        buffer.resize(sampleCount);
+        hdr.lpData = reinterpret_cast<LPSTR>(buffer.data());
+    }
+    std::memcpy(buffer.data(), samples, sampleCount * sizeof(int16_t));
 
-    hdr.lpData = reinterpret_cast<LPSTR>(m_audioBuffers[m_currentBufferIndex].data());
     hdr.dwBufferLength = static_cast<DWORD>(sampleCount * sizeof(int16_t));
-    hdr.dwFlags = 0;
-
-    waveOutPrepareHeader(m_waveOut, &hdr, sizeof(WAVEHDR));
     waveOutWrite(m_waveOut, &hdr, sizeof(WAVEHDR));
 
-    m_currentBufferIndex = (m_currentBufferIndex + 1) % 4;
+    m_currentBufferIndex = (m_currentBufferIndex + 1) % 8;
 #endif
 }
 
@@ -67,7 +69,7 @@ void EmulatorWidget::closeAudio() {
 #ifdef _WIN32
     if (m_waveOut) {
         waveOutReset(m_waveOut);
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 8; ++i) {
             if (m_waveHeaders[i].dwFlags & WHDR_PREPARED) {
                 waveOutUnprepareHeader(m_waveOut, &m_waveHeaders[i], sizeof(WAVEHDR));
             }
@@ -76,6 +78,7 @@ void EmulatorWidget::closeAudio() {
         m_waveOut = nullptr;
     }
     m_audioInitialized = false;
+    m_currentBufferIndex = 0;
 #endif
 }
 
@@ -101,6 +104,9 @@ bool EmulatorWidget::loadAndStartRom(const QString& romPath, const QString& save
         update();
         return false;
     }
+
+    closeAudio();
+    initAudio(static_cast<int>(m_engine->sampleRate()));
 
     // Only after loadRom: the core exposes no save RAM until a game is loaded.
     Pocket::Emulator::PersistentGameSave save;
@@ -148,6 +154,7 @@ void EmulatorWidget::stopEmulator() {
         m_engine->stop();
         m_engine.reset(); // Destroys MgbaEngine and unloads core DLL cleanly
     }
+    closeAudio();
 
     std::lock_guard<std::mutex> lock(m_frameMutex);
     m_currentFrame = QImage();

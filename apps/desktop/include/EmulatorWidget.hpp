@@ -36,7 +36,7 @@ private slots:
 
 private:
     Pocket::Emulator::EmulatorButton mapKeyToButton(int key) const;
-    void initAudio();
+    void initAudio(int sampleRate);
     void writeAudioSamples(const int16_t* samples, size_t frames);
     void closeAudio();
 
@@ -49,8 +49,8 @@ private:
 
 #ifdef _WIN32
     HWAVEOUT m_waveOut{nullptr};
-    WAVEHDR m_waveHeaders[4]{};
-    std::vector<int16_t> m_audioBuffers[4];
+    WAVEHDR m_waveHeaders[8]{};
+    std::vector<int16_t> m_audioBuffers[8];
     size_t m_currentBufferIndex{0};
     bool m_audioInitialized{false};
 #endif

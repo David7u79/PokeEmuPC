@@ -104,6 +104,23 @@ private slots:
         QVERIFY(!engine.isRunning());
     }
 
+    void testRealCoreSampleRate() {
+        const QString corePath = qEnvironmentVariable("POCKET_MGBA_CORE");
+        const QString romPath = qEnvironmentVariable("POCKET_TEST_ROM");
+        if (corePath.isEmpty() || romPath.isEmpty()) {
+            QSKIP("set POCKET_MGBA_CORE and POCKET_TEST_ROM to run this");
+        }
+
+        Pocket::Emulator::MgbaEngine engine(corePath.toStdString());
+        QVERIFY2(engine.hasCore(), engine.coreError().c_str());
+        QVERIFY(engine.loadRom(romPath.toStdString()));
+
+        const double rate = engine.sampleRate();
+        qInfo() << "sample rate:" << rate;
+        QVERIFY(rate > 0.0);
+        QVERIFY(rate != 44100.0);
+    }
+
     // Regression: touching save RAM before retro_load_game crashed inside mGBA.
     void testSaveRamBeforeRomDoesNotCrash() {
         const QString corePath = qEnvironmentVariable("POCKET_MGBA_CORE");

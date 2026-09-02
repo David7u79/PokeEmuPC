@@ -20,3 +20,7 @@ target_link_libraries(pocket_emulator_api PUBLIC
     pocket_save
     pocket_core
 )
+
+if (WIN32)
+    target_link_libraries(pocket_emulator_api PUBLIC winmm)
+endif()

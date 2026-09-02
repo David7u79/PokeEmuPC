@@ -1,3 +1,14 @@
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <mmsystem.h>
+#endif
+
 #include "pocket/emulator/MgbaEngine.hpp"
 #include "pocket/core/GameSystem.hpp"
 #include <QDebug>
@@ -134,6 +145,7 @@ bool MgbaEngine::loadRom(const std::string& romPath) {
     retro_system_av_info avInfo{};
     m_retro_get_system_av_info(&avInfo);
     if (avInfo.timing.fps > 0.0) m_fps = avInfo.timing.fps;
+    m_sampleRate = avInfo.timing.sample_rate > 0.0 ? avInfo.timing.sample_rate : 32768.0;
     m_retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
 
     // A save handed over before the game was loaded was only staged; the core
@@ -282,19 +294,37 @@ int16_t MgbaEngine::onInputState(unsigned, unsigned, unsigned, unsigned id) {
 void MgbaEngine::executionLoop() {
     using clock = std::chrono::steady_clock;
     const auto targetInterval = std::chrono::microseconds(static_cast<long long>(1000000.0 / m_fps));
+    auto next = clock::now();
+
+#ifdef _WIN32
+    timeBeginPeriod(1);
+#endif
 
     while (m_running) {
-        auto startTime = clock::now();
-
         if (!m_paused) {
             m_retro_run();
         }
 
-        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(clock::now() - startTime);
-        if (elapsed < targetInterval) {
-            std::this_thread::sleep_for(targetInterval - elapsed);
+        next += targetInterval;
+        auto now = clock::now();
+        if (now > next) {
+            next = now;
+            continue;
+        }
+
+        constexpr auto spinWindow = std::chrono::microseconds(1500);
+        const auto remaining = next - now;
+        if (remaining > spinWindow) {
+            std::this_thread::sleep_for(remaining - spinWindow);
+        }
+        while (m_running && clock::now() < next) {
+            std::this_thread::yield();
         }
     }
+
+#ifdef _WIN32
+    timeEndPeriod(1);
+#endif
 }
 
 bool MgbaEngine::handleEnvironment(unsigned cmd, void* data) {
