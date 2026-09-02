@@ -135,6 +135,15 @@ bool MgbaEngine::loadRom(const std::string& romPath) {
     m_retro_get_system_av_info(&avInfo);
     if (avInfo.timing.fps > 0.0) m_fps = avInfo.timing.fps;
     m_retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
+
+    // A save handed over before the game was loaded was only staged; the core
+    // exposes its save RAM now, so apply it.
+    if (!m_sramBuffer.empty()) {
+        PersistentGameSave staged;
+        staged.setData(m_sramBuffer);
+        m_sramBuffer.clear();
+        loadPersistentSave(staged);
+    }
     return true;
 }
 
@@ -180,7 +189,7 @@ PersistentGameSave MgbaEngine::getPersistentSave() const {
     std::lock_guard<std::mutex> lock(m_stateMutex);
     PersistentGameSave save;
 
-    if (m_retro_get_memory_data && m_retro_get_memory_size) {
+    if (m_gameLoaded && m_retro_get_memory_data && m_retro_get_memory_size) {
         void* data = m_retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
         size_t size = m_retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
         if (data && size > 0) {
@@ -199,7 +208,9 @@ bool MgbaEngine::loadPersistentSave(const PersistentGameSave& save) {
     if (save.isEmpty()) return false; // 12-Step Save Safety
 
     std::lock_guard<std::mutex> lock(m_stateMutex);
-    if (m_retro_get_memory_data && m_retro_get_memory_size) {
+    // Querying save RAM before retro_load_game dereferences a null core inside
+    // mGBA and takes the whole process down.
+    if (m_gameLoaded && m_retro_get_memory_data && m_retro_get_memory_size) {
         void* data = m_retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
         size_t size = m_retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
         if (data && size > 0) {

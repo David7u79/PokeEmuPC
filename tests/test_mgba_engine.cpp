@@ -88,11 +88,40 @@ private slots:
         QCOMPARE(width, 240);
         QCOMPARE(height, 160);
 
+        // GBA runs at 59.7 fps; anything well under that is visibly sluggish.
+        const int before = frames.load();
+        QElapsedTimer timer;
+        timer.start();
+        QTest::qWait(2000);
+        const double fps = (frames.load() - before) * 1000.0 / timer.elapsed();
+        qInfo() << "sustained fps:" << fps;
+        QVERIFY2(fps > 55.0, qPrintable(QString("only %1 fps").arg(fps)));
+
         // A GBA cartridge save must be readable back out of the core.
         QVERIFY(!engine.getPersistentSave().isEmpty());
 
         engine.stop();
         QVERIFY(!engine.isRunning());
+    }
+
+    // Regression: touching save RAM before retro_load_game crashed inside mGBA.
+    void testSaveRamBeforeRomDoesNotCrash() {
+        const QString corePath = qEnvironmentVariable("POCKET_MGBA_CORE");
+        const QString romPath = qEnvironmentVariable("POCKET_TEST_ROM");
+        if (corePath.isEmpty() || romPath.isEmpty()) {
+            QSKIP("set POCKET_MGBA_CORE and POCKET_TEST_ROM to run this");
+        }
+
+        Pocket::Emulator::MgbaEngine engine(corePath.toStdString());
+        QVERIFY2(engine.hasCore(), engine.coreError().c_str());
+
+        Pocket::Emulator::PersistentGameSave save;
+        save.setData(std::vector<uint8_t>(131072, 0x5A));
+
+        // No game loaded yet: must be staged, not fatal, and not silently dropped.
+        QVERIFY(engine.loadPersistentSave(save));
+        QVERIFY(engine.loadRom(romPath.toStdString()));
+        QCOMPARE(engine.getPersistentSave().data()[0], static_cast<uint8_t>(0x5A));
     }
 };
 

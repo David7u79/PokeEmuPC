@@ -96,16 +96,16 @@ bool EmulatorWidget::loadAndStartRom(const QString& romPath, const QString& save
         return false;
     }
 
-    // Load existing persistent cartridge save if present
-    Pocket::Emulator::PersistentGameSave save;
-    if (save.loadFromFile(m_savePath.toStdString())) {
-        m_engine->loadPersistentSave(save);
-    }
-
     if (!m_engine->loadRom(romPath.toStdString())) {
         m_statusMessage = "Failed to load ROM";
         update();
         return false;
+    }
+
+    // Only after loadRom: the core exposes no save RAM until a game is loaded.
+    Pocket::Emulator::PersistentGameSave save;
+    if (save.loadFromFile(m_savePath.toStdString())) {
+        m_engine->loadPersistentSave(save);
     }
 
     // Set video frame callback
