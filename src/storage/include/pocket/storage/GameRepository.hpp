@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pocket/core/Game.hpp"
+#include "pocket/core/RomFingerprint.hpp"
 #include "pocket/storage/GameMetadataResolver.hpp"
 #include "pocketpartner/storage/DatabaseManager.hpp"
 #include <vector>
@@ -31,7 +32,9 @@ public:
     explicit GameRepository(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager);
 
     ImportResult importGame(const std::string& romFilePath);
-    
+    ImportResult importGame(const std::string& romFilePath, const Core::RomFingerprint& precomputed);
+    bool isPathAlreadyImported(const std::string& romFilePath) const;
+
     std::vector<Core::Game> getAllGames() const;
     std::optional<Core::Game> getGameById(const Core::GameId& id) const;
     std::optional<Core::Game> getGameBySha256(const std::string& sha256) const;

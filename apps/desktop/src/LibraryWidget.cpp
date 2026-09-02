@@ -5,6 +5,12 @@
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QDateTime>
+#include <QMetaObject>
+#include <QPointer>
+#include <QProgressDialog>
+#include <QRunnable>
+#include <QThreadPool>
+#include <atomic>
 
 namespace Pocket::App {
 
@@ -83,13 +89,81 @@ void LibraryWidget::onAddGameClicked() {
 
     if (filePath.isEmpty()) return;
 
-    auto result = m_repo->importGame(filePath.toStdString());
-    if (result.status == Storage::ImportResultStatus::Success) {
-        refreshLibrary();
-        QMessageBox::information(this, "Import Successful", QString("Successfully imported %1.").arg(QString::fromStdString(result.game->title)));
-    } else {
-        QMessageBox::warning(this, "Import Failed", QString::fromStdString(result.errorMessage));
+    if (!m_repo) {
+        return;
     }
+
+    const std::string romFilePath = filePath.toStdString();
+    if (m_repo->isPathAlreadyImported(romFilePath)) {
+        QMessageBox::warning(this, "Import Failed", "Game path has already been imported into the library.");
+        return;
+    }
+
+    auto* progressDialog = new QProgressDialog(
+        QString("Importing %1...").arg(QFileInfo(filePath).fileName()), "Cancel", 0, 100, this);
+    progressDialog->setWindowModality(Qt::WindowModal);
+    progressDialog->setMinimumDuration(300);
+    progressDialog->setAutoClose(false);
+    progressDialog->setAutoReset(false);
+    progressDialog->show();
+
+    m_addButton->setEnabled(false);
+    auto cancelled = std::make_shared<std::atomic_bool>(false);
+    connect(progressDialog, &QProgressDialog::canceled, this, [cancelled] { cancelled->store(true); });
+
+    QPointer<QProgressDialog> dialog(progressDialog);
+    QPointer<LibraryWidget> widget(this);
+    auto* task = QRunnable::create([widget, romFilePath, cancelled, dialog] {
+        const Core::RomFingerprint fingerprint = Core::RomFingerprint::calculate(
+            romFilePath,
+            [widget, cancelled, dialog](qint64 done, qint64 total) {
+                if (cancelled->load()) {
+                    return false;
+                }
+
+                const int percent = total > 0 ? static_cast<int>((done * 100) / total) : 100;
+                if (!widget) {
+                    return false;
+                }
+                QMetaObject::invokeMethod(widget, [dialog, percent] {
+                    if (dialog) {
+                        dialog->setValue(percent);
+                    }
+                }, Qt::QueuedConnection);
+                return true;
+            });
+
+        if (!widget) {
+            return;
+        }
+        QMetaObject::invokeMethod(widget, [widget, romFilePath, cancelled, dialog, fingerprint] {
+            if (dialog) {
+                dialog->close();
+                dialog->deleteLater();
+            }
+            widget->m_addButton->setEnabled(true);
+
+            if (cancelled->load()) {
+                return;
+            }
+            if (!fingerprint.isValid()) {
+                QMessageBox::warning(widget, "Import Failed", "Unable to compute ROM fingerprint.");
+                return;
+            }
+
+            const auto result = widget->m_repo->importGame(romFilePath, fingerprint);
+            if (result.status == Storage::ImportResultStatus::Success) {
+                widget->refreshLibrary();
+                QMessageBox::information(
+                    widget,
+                    "Import Successful",
+                    QString("Successfully imported %1.").arg(QString::fromStdString(result.game->title)));
+            } else {
+                QMessageBox::warning(widget, "Import Failed", QString::fromStdString(result.errorMessage));
+            }
+        }, Qt::QueuedConnection);
+    });
+    QThreadPool::globalInstance()->start(task);
 }
 
 } // namespace Pocket::App

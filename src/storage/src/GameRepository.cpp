@@ -47,13 +47,10 @@ ImportResult GameRepository::importGame(const std::string& romFilePath) {
         return result;
     }
 
-    std::string canonicalPath = fileInfo.canonicalFilePath().toStdString();
+    const std::string canonicalPath = fileInfo.canonicalFilePath().toStdString();
 
     // Check duplicate by path in database
-    QSqlQuery query;
-    query.prepare("SELECT id FROM games WHERE rom_path = :path");
-    query.bindValue(":path", QString::fromStdString(canonicalPath));
-    if (query.exec() && query.next()) {
+    if (isPathAlreadyImported(canonicalPath)) {
         result.status = ImportResultStatus::DuplicatePath;
         result.errorMessage = "Game path has already been imported into the library.";
         return result;
@@ -61,7 +58,35 @@ ImportResult GameRepository::importGame(const std::string& romFilePath) {
 
     // Calculate RomFingerprint ONCE during import
     Core::RomFingerprint fp = Core::RomFingerprint::calculate(canonicalPath);
-    std::string sha256 = fp.sha256;
+    return importGame(canonicalPath, fp);
+}
+
+ImportResult GameRepository::importGame(const std::string& romFilePath, const Core::RomFingerprint& precomputed) {
+    ImportResult result;
+
+    QFileInfo fileInfo(QString::fromStdString(romFilePath));
+    if (!fileInfo.exists() || !fileInfo.isFile()) {
+        result.status = ImportResultStatus::FileNotFound;
+        result.errorMessage = "ROM file does not exist or is not a valid file.";
+        return result;
+    }
+
+    auto systemOpt = Core::GameSystemUtils::detectFromExtension(romFilePath);
+    if (!systemOpt.has_value() || systemOpt.value() == Core::GameSystem::Unknown) {
+        result.status = ImportResultStatus::InvalidSystem;
+        result.errorMessage = "Unsupported file extension (expected .gb, .gbc, .gba, .nds).";
+        return result;
+    }
+
+    const std::string canonicalPath = fileInfo.canonicalFilePath().toStdString();
+    if (isPathAlreadyImported(canonicalPath)) {
+        result.status = ImportResultStatus::DuplicatePath;
+        result.errorMessage = "Game path has already been imported into the library.";
+        return result;
+    }
+
+    const Core::RomFingerprint& fp = precomputed;
+    const std::string& sha256 = fp.sha256;
 
     if (sha256.empty()) {
         result.status = ImportResultStatus::FileNotFound;
@@ -72,6 +97,7 @@ ImportResult GameRepository::importGame(const std::string& romFilePath) {
     m_hashCache[canonicalPath] = sha256;
 
     // Check duplicate by SHA256 in database
+    QSqlQuery query;
     query.prepare("SELECT id FROM games WHERE sha256 = :sha256");
     query.bindValue(":sha256", QString::fromStdString(sha256));
     if (query.exec() && query.next()) {
@@ -117,6 +143,19 @@ ImportResult GameRepository::importGame(const std::string& romFilePath) {
     result.status = ImportResultStatus::Success;
     result.game = game;
     return result;
+}
+
+bool GameRepository::isPathAlreadyImported(const std::string& romFilePath) const {
+    QFileInfo fileInfo(QString::fromStdString(romFilePath));
+    const QString canonicalPath = fileInfo.canonicalFilePath();
+    if (canonicalPath.isEmpty()) {
+        return false;
+    }
+
+    QSqlQuery query;
+    query.prepare("SELECT id FROM games WHERE rom_path = :path");
+    query.bindValue(":path", canonicalPath);
+    return query.exec() && query.next();
 }
 
 std::vector<Core::Game> GameRepository::getAllGames() const {

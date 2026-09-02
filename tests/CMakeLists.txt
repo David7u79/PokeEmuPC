@@ -78,6 +78,7 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_melonds_engine PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
 
+
 add_executable(test_nds_display_transform
     test_nds_display_transform.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/NdsDisplayTransform.hpp
@@ -210,3 +211,5 @@ add_test(NAME test_audio_sink COMMAND test_audio_sink)
 if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_audio_sink PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
+
+add_pocket_test(test_rom_fingerprint_streaming test_rom_fingerprint_streaming.cpp)
