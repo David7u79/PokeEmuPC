@@ -10,6 +10,9 @@ namespace Pocket::App {
 EmulatorWidget::EmulatorWidget(QWidget* parent) : QWidget(parent) {
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(480, 320); // 2x scale GBA 240x160 resolution
+    m_hintOverlay.setSystem(m_controllerSystem);
+    m_hintTimer.setSingleShot(true);
+    connect(&m_hintTimer, &QTimer::timeout, this, [this] { setHintsVisible(false); });
 }
 
 EmulatorWidget::~EmulatorWidget() {
@@ -60,6 +63,8 @@ bool EmulatorWidget::loadAndStartRom(const QString& romPath, const QString& save
         [this](const int16_t* samples, size_t frames) { m_audioSink.submit(samples, frames); });
 
     m_engine->start();
+    setHintsVisible(true);
+    m_hintTimer.start(4000);
     return true;
 }
 
@@ -103,18 +108,31 @@ void EmulatorWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
-    std::lock_guard<std::mutex> lock(m_frameMutex);
-    if (!m_currentFrame.isNull()) {
-        painter.drawImage(rect(), m_currentFrame);
-    } else {
-        painter.fillRect(rect(), Qt::black);
-        painter.setPen(Qt::white);
-        painter.drawText(rect(), Qt::AlignCenter, m_statusMessage);
+    {
+        std::lock_guard<std::mutex> lock(m_frameMutex);
+        if (!m_currentFrame.isNull()) {
+            painter.drawImage(rect(), m_currentFrame);
+        } else {
+            painter.fillRect(rect(), Qt::black);
+            painter.setPen(Qt::white);
+            painter.drawText(rect(), Qt::AlignCenter, m_statusMessage);
+        }
+    }
+
+    if (m_hintsVisible) {
+        const QSize available(qMax(1, width() * 45 / 100), qMax(1, height() * 40 / 100));
+        const QSize overlaySize = m_hintOverlay.preferredSize(available);
+        if (!overlaySize.isEmpty()) {
+            const QRect overlayBounds(width() - overlaySize.width(), height() - overlaySize.height(),
+                                     overlaySize.width(), overlaySize.height());
+            m_hintOverlay.paint(painter, overlayBounds);
+        }
     }
 }
 
 void EmulatorWidget::setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping) {
     m_mapping = std::move(mapping);
+    m_hintOverlay.setMapping(m_mapping);
     refreshKeyBindings();
 }
 
@@ -122,7 +140,19 @@ void EmulatorWidget::setControllerSystem(const QString& system) {
     if (m_controllerSystem == system)
         return;
     m_controllerSystem = system;
+    m_hintOverlay.setSystem(m_controllerSystem);
     refreshKeyBindings();
+}
+
+void EmulatorWidget::setHintsVisible(bool visible) {
+    if (m_hintsVisible == visible)
+        return;
+    m_hintsVisible = visible;
+    update();
+}
+
+void EmulatorWidget::toggleHints() {
+    setHintsVisible(!m_hintsVisible);
 }
 
 void EmulatorWidget::refreshKeyBindings() {
@@ -154,6 +184,13 @@ std::optional<Pocket::Emulator::EmulatorButton> EmulatorWidget::buttonForKey(int
 }
 
 void EmulatorWidget::keyPressEvent(QKeyEvent* event) {
+    // F1 is reserved for the overlay even if a future mapping assigns it to a game button.
+    if (event->key() == Qt::Key_F1) {
+        if (!event->isAutoRepeat())
+            toggleHints();
+        event->accept();
+        return;
+    }
     // An unbound key must do nothing: this used to fall through to Up.
     if (m_engine && !event->isAutoRepeat()) {
         if (const auto btn = buttonForKey(event->key())) {
@@ -166,6 +203,10 @@ void EmulatorWidget::keyPressEvent(QKeyEvent* event) {
 }
 
 void EmulatorWidget::keyReleaseEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_F1) {
+        event->accept();
+        return;
+    }
     if (m_engine && !event->isAutoRepeat()) {
         if (const auto btn = buttonForKey(event->key())) {
             m_engine->sendButtonEvent(*btn, false);

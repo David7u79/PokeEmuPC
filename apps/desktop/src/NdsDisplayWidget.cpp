@@ -14,6 +14,9 @@ NdsDisplayWidget::NdsDisplayWidget(QWidget* parent)
     m_bottomImage.fill(Qt::darkCyan);
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(256, 384);
+    m_hintOverlay.setSystem(QStringLiteral("NDS"));
+    m_hintTimer.setSingleShot(true);
+    connect(&m_hintTimer, &QTimer::timeout, this, [this] { setHintsVisible(false); });
 }
 
 void NdsDisplayWidget::setLayoutMode(NdsScreenLayout mode) {
@@ -76,9 +79,20 @@ void NdsDisplayWidget::paintEvent(QPaintEvent* event) {
     m_transform.setViewport(size(), devicePixelRatioF());
     m_currentTopRect = m_transform.topRect();
     m_currentBottomRect = m_transform.bottomRect();
-    std::lock_guard<std::mutex> lock(m_frameMutex);
-    painter.drawImage(m_currentTopRect, m_topImage);
-    painter.drawImage(m_currentBottomRect, m_bottomImage);
+    {
+        std::lock_guard<std::mutex> lock(m_frameMutex);
+        painter.drawImage(m_currentTopRect, m_topImage);
+        painter.drawImage(m_currentBottomRect, m_bottomImage);
+    }
+    if (m_hintsVisible) {
+        const QSize available(qMax(1, width() * 45 / 100), qMax(1, height() * 40 / 100));
+        const QSize overlaySize = m_hintOverlay.preferredSize(available);
+        if (!overlaySize.isEmpty()) {
+            const QRect overlayBounds(width() - overlaySize.width(), height() - overlaySize.height(),
+                                     overlaySize.width(), overlaySize.height());
+            m_hintOverlay.paint(painter, overlayBounds);
+        }
+    }
 }
 
 void NdsDisplayWidget::mousePressEvent(QMouseEvent* event) {
@@ -105,7 +119,19 @@ void NdsDisplayWidget::processTouchEvent(const QPoint& mousePos, bool isPressed)
 
 void NdsDisplayWidget::setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping) {
     m_mapping = std::move(mapping);
+    m_hintOverlay.setMapping(m_mapping);
     refreshKeyBindings();
+}
+
+void NdsDisplayWidget::setHintsVisible(bool visible) {
+    if (m_hintsVisible == visible)
+        return;
+    m_hintsVisible = visible;
+    update();
+}
+
+void NdsDisplayWidget::toggleHints() {
+    setHintsVisible(!m_hintsVisible);
 }
 
 void NdsDisplayWidget::refreshKeyBindings() {
@@ -125,6 +151,13 @@ void NdsDisplayWidget::refreshKeyBindings() {
 }
 
 void NdsDisplayWidget::keyPressEvent(QKeyEvent* event) {
+    // F1 is reserved for the overlay even if a future mapping assigns it to a game button.
+    if (event->key() == Qt::Key_F1) {
+        if (!event->isAutoRepeat())
+            toggleHints();
+        event->accept();
+        return;
+    }
     if (!event->isAutoRepeat() && m_keyBindings.contains(event->key())) {
         emit buttonInputChanged(m_keyBindings.value(event->key()), true);
         event->accept();
@@ -134,6 +167,10 @@ void NdsDisplayWidget::keyPressEvent(QKeyEvent* event) {
 }
 
 void NdsDisplayWidget::keyReleaseEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_F1) {
+        event->accept();
+        return;
+    }
     if (!event->isAutoRepeat() && m_keyBindings.contains(event->key())) {
         emit buttonInputChanged(m_keyBindings.value(event->key()), false);
         event->accept();
@@ -144,6 +181,8 @@ void NdsDisplayWidget::keyReleaseEvent(QKeyEvent* event) {
 
 void NdsDisplayWidget::showEvent(QShowEvent* event) {
     m_framesEnabled.store(true, std::memory_order_relaxed);
+    setHintsVisible(true);
+    m_hintTimer.start(4000);
     QWidget::showEvent(event);
 }
 

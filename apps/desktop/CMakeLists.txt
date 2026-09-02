@@ -11,6 +11,7 @@ add_executable(PocketPartner
     include/NdsDisplayTransform.hpp
     include/CompanionWidget.hpp
     include/ControllerArtworkLayer.hpp
+    include/ControllerHintOverlay.hpp
     include/InteractiveControlLayer.hpp
     include/ControllerMapperWidget.hpp
     src/main.cpp
@@ -26,6 +27,7 @@ add_executable(PocketPartner
     src/NdsDisplayTransform.cpp
     src/CompanionWidget.cpp
     src/ControllerArtworkLayer.cpp
+    src/ControllerHintOverlay.cpp
     src/InteractiveControlLayer.cpp
     src/ControllerMapperWidget.cpp
 )
