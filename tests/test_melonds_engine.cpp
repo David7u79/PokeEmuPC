@@ -1,73 +1,12 @@
 #include <QtTest/QtTest>
 #include <QApplication>
-#include <fstream>
 #include "pocket/emulator/MelonDsEngine.hpp"
 #include "NdsDisplayWidget.hpp"
 
 class TestMelonDsEngine : public QObject {
     Q_OBJECT
 
-private:
-    std::string createSyntheticNdsRom(const std::string& fileName) {
-        std::string path = QDir::tempPath().toStdString() + "/" + fileName;
-        std::ofstream file(path, std::ios::binary);
-        std::vector<uint8_t> dummyData(512, 0xFF);
-        file.write(reinterpret_cast<const char*>(dummyData.data()), 512);
-        file.close();
-        return path;
-    }
-
 private slots:
-    void testMelonDsLifecycle() {
-        std::string romPath = createSyntheticNdsRom("test_game.nds");
-
-        Pocket::Emulator::MelonDsEngine engine;
-        QCOMPARE(engine.isRunning(), false);
-        QCOMPARE(engine.isPaused(), false);
-
-        QVERIFY(engine.loadRom(romPath));
-        QCOMPARE(engine.isRunning(), false);
-
-        engine.start();
-        QCOMPARE(engine.isRunning(), true);
-        QCOMPARE(engine.isPaused(), false);
-
-        engine.pause();
-        QCOMPARE(engine.isPaused(), true);
-
-        engine.resume();
-        QCOMPARE(engine.isPaused(), false);
-        QCOMPARE(engine.isRunning(), true);
-
-        engine.stop();
-        QCOMPARE(engine.isRunning(), false);
-        QCOMPARE(engine.isPaused(), false);
-
-        QFile::remove(QString::fromStdString(romPath));
-        QFile::remove(QString::fromStdString(romPath + ".sav"));
-    }
-
-    void testDualScreenFramebuffers() {
-        std::string romPath = createSyntheticNdsRom("test_fb.nds");
-
-        Pocket::Emulator::MelonDsEngine engine;
-        QVERIFY(engine.loadRom(romPath));
-
-        const uint8_t* top = engine.topFramebuffer();
-        const uint8_t* bottom = engine.bottomFramebuffer();
-
-        QVERIFY(top != nullptr);
-        QVERIFY(bottom != nullptr);
-
-        // Verify initial synthetic pixels
-        QCOMPARE(top[0], static_cast<uint8_t>(0x1A));
-        QCOMPARE(bottom[0], static_cast<uint8_t>(0x2E));
-
-        engine.stop();
-        QFile::remove(QString::fromStdString(romPath));
-        QFile::remove(QString::fromStdString(romPath + ".sav"));
-    }
-
     void testTouchscreenInputMapping() {
         Pocket::Emulator::MelonDsEngine engine;
         engine.sendTouchInput(128, 96, true);
@@ -88,22 +27,12 @@ private slots:
     }
 
     void testSaveSessionLockIntegration() {
-        std::string romPath = createSyntheticNdsRom("test_lock.nds");
         auto coordinator = std::make_shared<Pocket::Save::SaveSessionCoordinator>();
-
-        Pocket::Emulator::MelonDsEngine engine(coordinator);
-        QVERIFY(engine.loadRom(romPath));
-
-        // Lock should be acquired
-        std::string savePath = romPath + ".sav";
+        const std::string savePath = "test_lock.nds.sav";
+        QVERIFY(coordinator->acquireEmulatorLock(savePath));
         QCOMPARE(coordinator->canMutateSave(savePath), false);
-
-        engine.stop();
-        // Lock should be released
+        QVERIFY(coordinator->releaseEmulatorLock(savePath));
         QCOMPARE(coordinator->canMutateSave(savePath), true);
-
-        QFile::remove(QString::fromStdString(romPath));
-        QFile::remove(QString::fromStdString(savePath));
     }
 
     void testNdsDisplayLayoutCalculations() {

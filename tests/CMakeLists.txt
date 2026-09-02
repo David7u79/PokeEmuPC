@@ -75,6 +75,8 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_melonds_engine PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
 
+add_pocket_test(test_melonds_engine_real test_melonds_engine_real.cpp)
+
 add_pocket_test(test_controller_layout test_controller_layout.cpp)
 add_pocket_test(test_controller_mapping test_controller_mapping.cpp)
 
