@@ -91,6 +91,7 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
 endif()
 
 add_pocket_test(test_melonds_engine_real test_melonds_engine_real.cpp)
+add_pocket_test(test_gen4_emulation_save_integration test_gen4_emulation_save_integration.cpp)
 
 add_pocket_test(test_controller_layout test_controller_layout.cpp)
 add_pocket_test(test_controller_mapping test_controller_mapping.cpp)
