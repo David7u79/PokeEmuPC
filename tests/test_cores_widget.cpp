@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <QFileInfo>
 #include <QLabel>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -28,13 +29,24 @@ private:
 void CoresWidgetTest::initTestCase()
 {
     QVERIFY(m_settingsDirectory.isValid());
-    QSettings::setDefaultFormat(QSettings::IniFormat);
+    // Redirecting QSettings process-wide is not enough: setDefaultFormat did not
+    // take on Windows, the widget kept writing to the registry, and clear() wiped
+    // a real configured core path. Point the widget at a throwaway scope instead.
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_settingsDirectory.path());
+    App::CoresWidget::setSettingsScope(QStringLiteral("PocketPartnerTest"),
+                                       QStringLiteral("CoresWidgetTest"));
 }
 
 void CoresWidgetTest::init()
 {
-    QSettings settings("PocketPartnerProject", "PocketPartner");
+    QSettings settings = App::CoresWidget::openSettings();
+
+    // clear() erases the whole organisation tree, so prove we are not pointed at
+    // the real configuration before erasing anything. This has already destroyed a
+    // configured core path once.
+    QVERIFY2(!settings.fileName().contains(QLatin1String("PocketPartnerProject")),
+             qPrintable("test settings resolved to the real configuration: " + settings.fileName()));
+
     settings.clear();
     settings.sync();
 }
@@ -53,7 +65,7 @@ void CoresWidgetTest::startsUnconfigured()
 
 void CoresWidgetTest::readsSettings()
 {
-    QSettings settings("PocketPartnerProject", "PocketPartner");
+    QSettings settings = App::CoresWidget::openSettings();
     settings.setValue("emulator/mgbaCorePath", "C:/temporary/mgba.dll");
     settings.setValue("emulator/melonDsCorePath", "C:/temporary/melonds.dll");
     settings.sync();
@@ -69,7 +81,7 @@ void CoresWidgetTest::rejectsNonCorePath()
     file.write("not a libretro core");
     file.flush();
     App::CoresWidget widget;
-    QSettings settings("PocketPartnerProject", "PocketPartner");
+    QSettings settings = App::CoresWidget::openSettings();
     settings.setValue("emulator/mgbaCorePath", file.fileName());
     settings.sync();
     widget.refresh();
@@ -79,7 +91,7 @@ void CoresWidgetTest::rejectsNonCorePath()
 
 void CoresWidgetTest::refreshHandlesInvalidPaths()
 {
-    QSettings settings("PocketPartnerProject", "PocketPartner");
+    QSettings settings = App::CoresWidget::openSettings();
     settings.setValue("emulator/mgbaCorePath", "C:/temporary/missing.dll");
     settings.setValue("emulator/melonDsCorePath", "C:/temporary/missing.dll");
     settings.sync();
@@ -93,7 +105,7 @@ void CoresWidgetTest::showsRealCoreWhenAvailable()
     const QString core = DevAssets::melonDsCore();
     if (core.isEmpty())
         QSKIP("melonDS core is not configured");
-    QSettings settings("PocketPartnerProject", "PocketPartner");
+    QSettings settings = App::CoresWidget::openSettings();
     settings.setValue("emulator/melonDsCorePath", core);
     settings.sync();
     App::CoresWidget widget;

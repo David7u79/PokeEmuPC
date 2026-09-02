@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pocket/core/GameSystem.hpp"
+#include <QSettings>
 #include <QWidget>
 
 class QLineEdit;
@@ -14,6 +15,12 @@ public:
     explicit CoresWidget(QWidget* parent = nullptr);
     void refresh();
     QString corePath(Core::GameSystem system) const;
+
+    // Where core paths are stored. Tests point this at a throwaway file; without
+    // the seam they can only redirect QSettings process-wide, which silently
+    // failed on Windows and let a test wipe the real configuration.
+    static void setSettingsScope(const QString& organization, const QString& application);
+    static QSettings openSettings();
 
 signals:
     void corePathChanged(Core::GameSystem system, const QString& path);

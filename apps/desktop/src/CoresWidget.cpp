@@ -17,6 +17,18 @@
 namespace Pocket::App {
 namespace {
 
+QString& settingsOrganization()
+{
+    static QString organization = QStringLiteral("PocketPartnerProject");
+    return organization;
+}
+
+QString& settingsApplication()
+{
+    static QString application = QStringLiteral("PocketPartner");
+    return application;
+}
+
 QString coreFilter()
 {
 #ifdef Q_OS_WIN
@@ -63,9 +75,20 @@ CoresWidget::CoresWidget(QWidget* parent) : QWidget(parent)
     refresh();
 }
 
+void CoresWidget::setSettingsScope(const QString& organization, const QString& application)
+{
+    settingsOrganization() = organization;
+    settingsApplication() = application;
+}
+
+QSettings CoresWidget::openSettings()
+{
+    return QSettings(settingsOrganization(), settingsApplication());
+}
+
 void CoresWidget::refresh()
 {
-    QSettings settings("PocketPartnerProject", "PocketPartner");
+    QSettings settings = openSettings();
     for (CoreRow* row : {&m_mgba, &m_melonDs}) {
         row->pathEdit->setText(settings.value(row->settingsKey).toString());
         row->pathEdit->setToolTip(row->pathEdit->text());
@@ -128,7 +151,7 @@ void CoresWidget::importCore(CoreRow& row)
 
 void CoresWidget::clear(CoreRow& row)
 {
-    QSettings settings("PocketPartnerProject", "PocketPartner");
+    QSettings settings = openSettings();
     settings.remove(row.settingsKey);
     row.pathEdit->clear();
     row.pathEdit->setToolTip({});
@@ -149,7 +172,7 @@ bool CoresWidget::validateAndSave(CoreRow& row, const QString& path)
             QMessageBox::Yes)
         return false;
 
-    QSettings settings("PocketPartnerProject", "PocketPartner");
+    QSettings settings = openSettings();
     settings.setValue(row.settingsKey, path);
     row.pathEdit->setText(path);
     row.pathEdit->setToolTip(path);
