@@ -2,6 +2,7 @@ add_executable(PocketPartner
     include/MainWindow.hpp
     include/LibraryWidget.hpp
     include/SettingsWidget.hpp
+    include/CoresWidget.hpp
     include/EmulatorWidget.hpp
     include/AudioSink.hpp
     include/DiagnosticsWidget.hpp
@@ -16,6 +17,7 @@ add_executable(PocketPartner
     src/MainWindow.cpp
     src/LibraryWidget.cpp
     src/SettingsWidget.cpp
+    src/CoresWidget.cpp
     src/EmulatorWidget.cpp
     src/AudioSink.cpp
     src/DiagnosticsWidget.cpp
