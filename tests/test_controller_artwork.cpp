@@ -1,4 +1,5 @@
 #include <QtTest/QtTest>
+#include <QDir>
 #include <QImage>
 #include <QPainter>
 #include <QSvgRenderer>
@@ -30,6 +31,35 @@ private slots:
         QPainter painter(&canvas);
         renderer.render(&painter, QRectF(0, 0, 400, 300));
         painter.end();
+
+        // Set POCKET_ARTWORK_DUMP_DIR to eyeball what these assertions cannot judge:
+        // whether the console is recognisable and the screen looks the right size.
+        const QString dumpDir = qEnvironmentVariable("POCKET_ARTWORK_DUMP_DIR");
+        if (!dumpDir.isEmpty()) {
+            // The assertions above render into a fixed 400x300, which stretches the
+            // drawing. Judging that by eye would judge the distortion, so the dump
+            // gets its own canvas at the artwork's real aspect.
+            const QSizeF viewBox = renderer.viewBoxF().size();
+            const int dumpHeight = 900;
+            const int dumpWidth = qRound(dumpHeight * viewBox.width() / viewBox.height());
+            QImage annotated(dumpWidth, dumpHeight, QImage::Format_ARGB32);
+            annotated.fill(Qt::transparent);
+            QPainter shot(&annotated);
+            renderer.render(&shot, QRectF(0, 0, dumpWidth, dumpHeight));
+            shot.end();
+            QDir().mkpath(dumpDir);
+            annotated.save(dumpDir + "/" + system + ".png");
+
+            QPainter marker(&annotated);
+            marker.setPen(QPen(QColor(255, 0, 0, 220), 2));
+            marker.setBrush(QColor(255, 0, 0, 60));
+            for (const auto& control : layout->controls()) {
+                marker.drawRect(QRectF(control.x * annotated.width(), control.y * annotated.height(),
+                                       control.width * annotated.width(), control.height * annotated.height()));
+            }
+            marker.end();
+            annotated.save(dumpDir + "/" + system + "-rects.png");
+        }
 
         // A blank canvas means the file parsed but drew nothing.
         int painted = 0;
