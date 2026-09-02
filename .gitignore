@@ -8,3 +8,14 @@ aqtinstall.log
 .cache/
 .ninja_*
 out/
+
+# Developer-local emulator assets: ROMs, saves and cores are never committed.
+*.nds
+*.gba
+*.gb
+*.gbc
+*.sav
+*.srm
+*.dsv
+*.bin
+*_libretro.dll
