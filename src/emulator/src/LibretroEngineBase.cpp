@@ -186,6 +186,18 @@ void LibretroEngineBase::stop() {
     if (m_executionThread.joinable())
         m_executionThread.join();
     if (m_gameLoaded && m_retro_unload_game) {
+        // Snapshot save RAM before the core lets go of it: unloading makes it
+        // unreachable, so a caller that stops first would silently lose the
+        // session. getPersistentSave() falls back to this buffer afterwards.
+        if (m_retro_get_memory_data && m_retro_get_memory_size) {
+            const void* data = m_retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+            const size_t size = m_retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+            if (data && size > 0) {
+                std::lock_guard<std::mutex> lock(m_stateMutex);
+                m_sramBuffer.resize(size);
+                std::memcpy(m_sramBuffer.data(), data, size);
+            }
+        }
         m_retro_unload_game();
         m_gameLoaded = false;
     }

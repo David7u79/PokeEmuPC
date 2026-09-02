@@ -82,6 +82,8 @@ private slots:
         SaveParseStatus status = SaveParseStatus::NoValidSlotFound;
         std::string trainerName;
         size_t partySize = 0;
+        size_t boxed = 0;
+        bool startedGame = false;
         {
             MelonDsEngine engine(m_core.toStdString(), coordinator);
             QVERIFY2(engine.hasCore(), engine.coreError().c_str());
@@ -99,9 +101,11 @@ private slots:
             engine.setVideoFrameCallback([&frames](const uint8_t*, int, int, size_t) { ++frames; });
             engine.start();
             QTRY_VERIFY_WITH_TIMEOUT(frames.load() > 120, 10000);
+
+            // Read before stop(): unloading the game takes save RAM away with it.
+            const PersistentGameSave produced = engine.getPersistentSave();
             engine.stop();
 
-            const PersistentGameSave produced = engine.getPersistentSave();
             QVERIFY2(!produced.isEmpty(), "the session produced no save RAM");
             QVERIFY(produced.saveToFile(workingSave.toStdString()));
 
@@ -115,27 +119,51 @@ private slots:
             trainerName = result.trainerName;
             partySize = result.party.size();
 
-            if (status == SaveParseStatus::Success) {
+            // Report before asserting, so a failure says what was actually read.
+            qInfo().noquote() << "gen4 parse status :" << static_cast<int>(status) << result.errorMessage.c_str();
+            qInfo().noquote() << "active slot       :" << result.activeSlotIndex << "counter" << result.saveCounter;
+            qInfo().noquote() << "trainer           :" << QString::fromStdString(result.trainerName)
+                              << "id" << result.trainerId << "money" << result.money;
+            qInfo().noquote() << "play time         :" << result.playTimeHours << "h" << result.playTimeMinutes << "m";
+            qInfo().noquote() << "party size        :" << result.party.size();
+            for (const auto& creature : result.party) {
+                qInfo().noquote() << "  party member    : species" << creature.speciesId << "level"
+                                  << creature.level;
+            }
+            for (const auto& box : result.boxes) boxed += box.size();
+            qInfo().noquote() << "boxed creatures   :" << boxed;
+
+            // A blank cartridge still parses: the structure is there, the content
+            // is not. Trainer id, money, play time and party all reading zero means
+            // nothing was ever saved from inside the game, and asserting against
+            // that would be a test that passes while proving nothing.
+            startedGame = result.trainerId != 0 || result.money != 0 || result.playTimeHours != 0 ||
+                          result.playTimeMinutes != 0 || !result.party.empty() || boxed != 0;
+
+            if (status == SaveParseStatus::Success && startedGame) {
                 QVERIFY2(!result.trainerName.empty(), "trainer name did not survive the session");
                 QVERIFY2(result.activeSlotIndex >= 0, "no valid save slot after emulation");
-                QVERIFY2(!result.party.empty(), "party came back empty");
+                // The party may still be empty before the starter is handed over.
                 for (const auto& creature : result.party) {
                     QVERIFY2(creature.speciesId > 0, "party member has no species");
+                    QVERIFY2(creature.level > 0, "party member has no level");
                 }
             }
         }
-
-        qInfo().noquote() << "gen4 parse status :" << static_cast<int>(status);
-        qInfo().noquote() << "trainer           :" << QString::fromStdString(trainerName);
-        qInfo().noquote() << "party size        :" << partySize;
 
         // Whatever the parser concluded, the developer's file is untouched.
         QCOMPARE(sha256Of(m_sourceSave), sourceHashBefore);
 
         QVERIFY2(status == SaveParseStatus::Success,
-                 qPrintable(QString("Gen4SaveParser rejected the emulated save (status %1). A save written "
-                                    "before the game itself saved in-game will not parse.")
+                 qPrintable(QString("Gen4SaveParser rejected the emulated save (status %1).")
                                 .arg(static_cast<int>(status))));
+
+        if (!startedGame) {
+            QSKIP("The save parses but holds no started game: trainer id, money, play time, party and "
+                  "boxes are all empty. Play far enough to be handed a starter, save from inside the "
+                  "game, then close PocketPartner so a real save is written.");
+        }
+        QVERIFY2(partySize > 0, "a started game reported an empty party");
     }
 
     void theSourceSaveIsNeverOpenedForWriting()
