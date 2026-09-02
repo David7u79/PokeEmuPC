@@ -61,6 +61,39 @@ private slots:
         QVERIFY(engine.handleEnvironment(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format));
         QVERIFY(!engine.handleEnvironment(9999, nullptr));
     }
+
+    // Skipped unless POCKET_MGBA_CORE and POCKET_TEST_ROM point at a real
+    // libretro core and ROM: neither can be redistributed with the repo.
+    void testRealCoreProducesFrames() {
+        const QString corePath = qEnvironmentVariable("POCKET_MGBA_CORE");
+        const QString romPath = qEnvironmentVariable("POCKET_TEST_ROM");
+        if (corePath.isEmpty() || romPath.isEmpty()) {
+            QSKIP("set POCKET_MGBA_CORE and POCKET_TEST_ROM to run this");
+        }
+
+        Pocket::Emulator::MgbaEngine engine(corePath.toStdString());
+        QVERIFY2(engine.hasCore(), engine.coreError().c_str());
+        QVERIFY(engine.loadRom(romPath.toStdString()));
+
+        std::atomic<int> frames{0};
+        int width = 0, height = 0;
+        engine.setVideoFrameCallback([&](const uint8_t*, int w, int h, size_t) {
+            width = w;
+            height = h;
+            ++frames;
+        });
+
+        engine.start();
+        QTRY_VERIFY_WITH_TIMEOUT(frames.load() > 30, 5000);
+        QCOMPARE(width, 240);
+        QCOMPARE(height, 160);
+
+        // A GBA cartridge save must be readable back out of the core.
+        QVERIFY(!engine.getPersistentSave().isEmpty());
+
+        engine.stop();
+        QVERIFY(!engine.isRunning());
+    }
 };
 
 QTEST_MAIN(TestMgbaEngine)
