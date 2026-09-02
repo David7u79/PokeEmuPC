@@ -78,6 +78,22 @@ endif()
 add_pocket_test(test_controller_layout test_controller_layout.cpp)
 add_pocket_test(test_controller_mapping test_controller_mapping.cpp)
 
+add_executable(test_controller_mapper_widget
+    test_controller_mapper_widget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/ControllerArtworkLayer.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/ControllerArtworkLayer.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/InteractiveControlLayer.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/InteractiveControlLayer.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/ControllerMapperWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/ControllerMapperWidget.cpp
+)
+target_include_directories(test_controller_mapper_widget PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
+target_link_libraries(test_controller_mapper_widget PRIVATE Qt6::Core Qt6::Test Qt6::Widgets Qt6::Svg Qt6::SvgWidgets pocket_input)
+add_test(NAME test_controller_mapper_widget COMMAND test_controller_mapper_widget)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_controller_mapper_widget PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+endif()
+
 # Save Coordination & Stability Tests
 add_pocket_test(test_save_coordination test_save_coordination.cpp)
 
