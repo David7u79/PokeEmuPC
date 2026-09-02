@@ -33,6 +33,9 @@ public:
     bool hintsVisible() const { return m_hintsVisible; }
     void setHintsVisible(bool visible);
     void toggleHints();
+    EmulatorViewMode viewMode() const { return m_viewMode; }
+    void setViewMode(EmulatorViewMode mode);
+    void toggleViewMode();
 
     // Calculate bounding rects for current widget size
     void calculateScreenRects(const QRect& totalBounds, QRect& outTopRect, QRect& outBottomRect) const;
@@ -65,6 +68,7 @@ private:
     QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
     ControllerHintOverlay m_hintOverlay;
     bool m_hintsVisible{true};
+    EmulatorViewMode m_viewMode{EmulatorViewMode::ConsoleFrame};
 
     QRect m_currentTopRect;
     QRect m_currentBottomRect;

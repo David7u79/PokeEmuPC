@@ -18,7 +18,7 @@ QString displayLabel(const Pocket::Input::InputBinding& binding)
     return label;
 }
 
-QRectF controlRect(const Pocket::Input::ControllerControl& control, const QRectF& target)
+QRectF layoutControlRect(const Pocket::Input::ControllerControl& control, const QRectF& target)
 {
     return {target.left() + control.x * target.width(), target.top() + control.y * target.height(),
             control.width * target.width(), control.height * target.height()};
@@ -29,6 +29,7 @@ void ControllerHintOverlay::setSystem(const QString& system)
 {
     m_layout = Pocket::Input::ControllerLayout::forSystem(system);
     m_artwork.setSystem(system);
+    m_framePixmap = {};
 }
 
 void ControllerHintOverlay::setMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping)
@@ -48,23 +49,56 @@ QSize ControllerHintOverlay::preferredSize(const QSize& available) const
     return m_artwork.targetRect(available).size().toSize();
 }
 
-void ControllerHintOverlay::paint(QPainter& painter, const QRect& bounds) const
+QRectF ControllerHintOverlay::artworkRect(const QSize& widgetSize) const
 {
-    if (!isValid() || bounds.isEmpty())
+    if (!isValid())
+        return {};
+    return m_artwork.targetRect(widgetSize);
+}
+
+QRectF ControllerHintOverlay::controlRect(const QString& id, const QSize& widgetSize) const
+{
+    if (!m_layout)
+        return {};
+    const auto controls = m_layout->controls();
+    const auto control = std::find_if(controls.cbegin(), controls.cend(), [&id](const auto& candidate) {
+        return candidate.id == id;
+    });
+    if (control == controls.cend())
+        return {};
+    return layoutControlRect(*control, artworkRect(widgetSize));
+}
+
+void ControllerHintOverlay::paintFrame(QPainter& painter, const QSize& widgetSize) const
+{
+    if (!isValid() || widgetSize.isEmpty())
         return;
+    const qreal dpr = painter.device() ? painter.device()->devicePixelRatioF() : 1.0;
+    if (m_framePixmap.isNull() || m_cachedSize != widgetSize || !qFuzzyCompare(m_cachedDevicePixelRatio, dpr)
+        || m_cachedSystem != m_artwork.system()) {
+        QPixmap pixmap(qRound(widgetSize.width() * dpr), qRound(widgetSize.height() * dpr));
+        pixmap.setDevicePixelRatio(dpr);
+        pixmap.fill(Qt::transparent);
+        QPainter cachePainter(&pixmap);
+        m_artwork.render(cachePainter, artworkRect(widgetSize));
+        m_framePixmap = std::move(pixmap);
+        m_cachedSize = widgetSize;
+        m_cachedDevicePixelRatio = dpr;
+        m_cachedSystem = m_artwork.system();
+        ++m_rasterizationCount;
+    }
+    painter.drawPixmap(QPointF(), m_framePixmap);
+}
+
+void ControllerHintOverlay::paintKeyLabels(QPainter& painter, const QSize& widgetSize) const
+{
+    if (!isValid() || !m_mapping)
+        return;
+    const QRect bounds(QPoint(), widgetSize);
+    const QRectF target = artworkRect(widgetSize);
 
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.fillRect(bounds, QColor(0, 0, 0, 175));
-
-    const QRectF target = m_artwork.targetRect(bounds.size()).translated(bounds.topLeft());
-    m_artwork.render(painter, target);
-
-    if (!m_mapping) {
-        painter.restore();
-        return;
-    }
-
     QFont font = painter.font();
     font.setPointSizeF(qMax(7.0, qMin(12.0, target.height() / 24.0)));
     font.setBold(true);
@@ -83,7 +117,7 @@ void ControllerHintOverlay::paint(QPainter& painter, const QRect& bounds) const
         if (label.isEmpty())
             continue;
 
-        const QRectF button = controlRect(control, target);
+        const QRectF button = layoutControlRect(control, target);
         const int roomRight = bounds.right() - qCeil(button.right());
         const int roomLeft = qFloor(button.left()) - bounds.left();
         const bool preferredRight = roomRight >= roomLeft;
@@ -122,6 +156,17 @@ void ControllerHintOverlay::paint(QPainter& painter, const QRect& bounds) const
         painter.drawText(labelRect, Qt::AlignCenter, text);
         usedLabelRects.push_back(labelRect);
     }
+    painter.restore();
+}
+
+void ControllerHintOverlay::paint(QPainter& painter, const QRect& bounds) const
+{
+    if (!isValid() || bounds.isEmpty())
+        return;
+    painter.save();
+    painter.translate(bounds.topLeft());
+    paintFrame(painter, bounds.size());
+    paintKeyLabels(painter, bounds.size());
     painter.restore();
 }
 

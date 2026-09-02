@@ -23,6 +23,14 @@ void NdsDisplayTransform::setScreenSize(const QSize& screenSize) {
     updateRects();
 }
 
+void NdsDisplayTransform::setTouchScreenRect(const QRectF& rect) {
+    m_touchScreenRect = rect;
+}
+
+void NdsDisplayTransform::clearTouchScreenRect() {
+    m_touchScreenRect = {};
+}
+
 QRect NdsDisplayTransform::topRect() const {
     return m_topRect;
 }
@@ -41,12 +49,17 @@ NdsScreen NdsDisplayTransform::screenAt(const QPoint& widgetPos) const {
 }
 
 std::optional<QPoint> NdsDisplayTransform::touchAt(const QPoint& widgetPos) const {
-    if (screenAt(widgetPos) != NdsScreen::Bottom || m_bottomRect.isEmpty())
+    const QRectF touchRect = m_touchScreenRect.isEmpty() ? QRectF(m_bottomRect.adjusted(0, 0, -1, -1))
+                                                         : m_touchScreenRect;
+    if (touchRect.isEmpty() || widgetPos.x() < touchRect.left() || widgetPos.x() > touchRect.right()
+        || widgetPos.y() < touchRect.top() || widgetPos.y() > touchRect.bottom())
         return std::nullopt;
-    const int x = std::clamp((widgetPos.x() - m_bottomRect.left()) * m_screenSize.width() / m_bottomRect.width(), 0,
-                             m_screenSize.width() - 1);
-    const int y = std::clamp((widgetPos.y() - m_bottomRect.top()) * m_screenSize.height() / m_bottomRect.height(), 0,
-                             m_screenSize.height() - 1);
+    const int x = std::clamp(static_cast<int>(std::floor((widgetPos.x() - touchRect.left()) * m_screenSize.width()
+                                                         / touchRect.width())),
+                             0, m_screenSize.width() - 1);
+    const int y = std::clamp(static_cast<int>(std::floor((widgetPos.y() - touchRect.top()) * m_screenSize.height()
+                                                         / touchRect.height())),
+                             0, m_screenSize.height() - 1);
     return QPoint(x, y);
 }
 

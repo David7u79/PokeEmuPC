@@ -18,6 +18,8 @@ NdsDisplayWidget::NdsDisplayWidget(QWidget* parent)
     m_hintOverlay.setSystem(QStringLiteral("NDS"));
     QSettings settings("PocketPartnerProject", "PocketPartner");
     m_hintsVisible = settings.value("emulator/showControlHints", true).toBool();
+    m_viewMode = settings.value("emulator/viewMode", 0).toInt() == 1 ? EmulatorViewMode::FullScreen
+                                                                      : EmulatorViewMode::ConsoleFrame;
 }
 
 void NdsDisplayWidget::setLayoutMode(NdsScreenLayout mode) {
@@ -38,13 +40,21 @@ void NdsDisplayWidget::updateFramebuffers(const uint8_t* topRgba, const uint8_t*
 }
 
 void NdsDisplayWidget::submitCombinedFrame(const uint8_t* pixels, int width, int height, size_t pitch) {
-    if (!m_framesEnabled.load(std::memory_order_relaxed) || !pixels || width != 256 || height != 384)
+    if (!m_framesEnabled.load(std::memory_order_relaxed) || !pixels || width <= 0 || height < 2 || pitch == 0)
         return;
     std::lock_guard<std::mutex> lock(m_frameMutex);
-    constexpr size_t rowBytes = 256 * 4;
-    for (int y = 0; y < 192; ++y) {
+    const int screenHeight = height / 2;
+    const size_t rowBytes = static_cast<size_t>(width) * 4;
+    if (pitch < rowBytes)
+        return;
+    if (m_topImage.size() != QSize(width, screenHeight)) {
+        m_topImage = QImage(width, screenHeight, QImage::Format_RGB32);
+        m_bottomImage = QImage(width, screenHeight, QImage::Format_RGB32);
+        m_transform.setScreenSize(QSize(width, screenHeight));
+    }
+    for (int y = 0; y < screenHeight; ++y) {
         std::memcpy(m_topImage.scanLine(y), pixels + static_cast<size_t>(y) * pitch, rowBytes);
-        std::memcpy(m_bottomImage.scanLine(y), pixels + static_cast<size_t>(y + 192) * pitch, rowBytes);
+        std::memcpy(m_bottomImage.scanLine(y), pixels + static_cast<size_t>(y + screenHeight) * pitch, rowBytes);
     }
     QMetaObject::invokeMethod(
         this, [this] { update(); }, Qt::QueuedConnection);
@@ -77,23 +87,38 @@ void NdsDisplayWidget::paintEvent(QPaintEvent* event) {
     Q_UNUSED(event);
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
-    m_transform.setViewport(size(), devicePixelRatioF());
-    m_currentTopRect = m_transform.topRect();
-    m_currentBottomRect = m_transform.bottomRect();
+    const bool framed = m_viewMode == EmulatorViewMode::ConsoleFrame && m_hintOverlay.isValid();
+    if (framed) {
+        m_hintOverlay.paintFrame(painter, size());
+        m_currentTopRect = m_hintOverlay.controlRect(QStringLiteral("SCREEN_TOP"), size()).toAlignedRect();
+        m_currentBottomRect = m_hintOverlay.controlRect(QStringLiteral("TOUCHSCREEN"), size()).toAlignedRect();
+        m_transform.setTouchScreenRect(QRectF(m_currentBottomRect));
+    } else {
+        m_transform.clearTouchScreenRect();
+        m_transform.setViewport(size(), devicePixelRatioF());
+        m_currentTopRect = m_transform.topRect();
+        m_currentBottomRect = m_transform.bottomRect();
+    }
     {
         std::lock_guard<std::mutex> lock(m_frameMutex);
         painter.drawImage(m_currentTopRect, m_topImage);
         painter.drawImage(m_currentBottomRect, m_bottomImage);
     }
-    if (m_hintsVisible) {
-        const QSize available(qMax(1, width() * 45 / 100), qMax(1, height() * 40 / 100));
-        const QSize overlaySize = m_hintOverlay.preferredSize(available);
-        if (!overlaySize.isEmpty()) {
-            const QRect overlayBounds(width() - overlaySize.width(), height() - overlaySize.height(),
-                                     overlaySize.width(), overlaySize.height());
-            m_hintOverlay.paint(painter, overlayBounds);
-        }
-    }
+    if (framed && m_hintsVisible)
+        m_hintOverlay.paintKeyLabels(painter, size());
+}
+
+void NdsDisplayWidget::setViewMode(EmulatorViewMode mode) {
+    if (m_viewMode == mode)
+        return;
+    m_viewMode = mode;
+    QSettings("PocketPartnerProject", "PocketPartner").setValue("emulator/viewMode", mode == EmulatorViewMode::FullScreen ? 1 : 0);
+    update();
+}
+
+void NdsDisplayWidget::toggleViewMode() {
+    setViewMode(m_viewMode == EmulatorViewMode::ConsoleFrame ? EmulatorViewMode::FullScreen
+                                                              : EmulatorViewMode::ConsoleFrame);
 }
 
 void NdsDisplayWidget::mousePressEvent(QMouseEvent* event) {
@@ -162,6 +187,12 @@ void NdsDisplayWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
+    if (event->key() == Qt::Key_F2) {
+        if (!event->isAutoRepeat())
+            toggleViewMode();
+        event->accept();
+        return;
+    }
     if (!event->isAutoRepeat() && m_keyBindings.contains(event->key())) {
         emit buttonInputChanged(m_keyBindings.value(event->key()), true);
         event->accept();
@@ -172,6 +203,10 @@ void NdsDisplayWidget::keyPressEvent(QKeyEvent* event) {
 
 void NdsDisplayWidget::keyReleaseEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_F1) {
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_F2) {
         event->accept();
         return;
     }

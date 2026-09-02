@@ -14,6 +14,8 @@ EmulatorWidget::EmulatorWidget(QWidget* parent) : QWidget(parent) {
     m_hintOverlay.setSystem(m_controllerSystem);
     QSettings settings("PocketPartnerProject", "PocketPartner");
     m_hintsVisible = settings.value("emulator/showControlHints", true).toBool();
+    m_viewMode = settings.value("emulator/viewMode", 0).toInt() == 1 ? EmulatorViewMode::FullScreen
+                                                                      : EmulatorViewMode::ConsoleFrame;
 }
 
 EmulatorWidget::~EmulatorWidget() {
@@ -107,27 +109,33 @@ void EmulatorWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
+    painter.fillRect(rect(), Qt::black);
+    const bool framed = m_viewMode == EmulatorViewMode::ConsoleFrame && m_hintOverlay.isValid();
+    const QRectF screen = framed ? m_hintOverlay.controlRect(QStringLiteral("SCREEN"), size()) : QRectF(rect());
+    if (framed)
+        m_hintOverlay.paintFrame(painter, size());
     {
         std::lock_guard<std::mutex> lock(m_frameMutex);
         if (!m_currentFrame.isNull()) {
-            painter.drawImage(rect(), m_currentFrame);
+            painter.drawImage(screen, m_currentFrame, m_currentFrame.rect());
         } else {
-            painter.fillRect(rect(), Qt::black);
             painter.setPen(Qt::white);
-            painter.drawText(rect(), Qt::AlignCenter, m_statusMessage);
+            painter.drawText(screen, Qt::AlignCenter, m_statusMessage);
         }
     }
-
-    if (m_hintsVisible) {
-        const QSize available(qMax(1, width() * 45 / 100), qMax(1, height() * 40 / 100));
-        const QSize overlaySize = m_hintOverlay.preferredSize(available);
-        if (!overlaySize.isEmpty()) {
-            const QRect overlayBounds(width() - overlaySize.width(), height() - overlaySize.height(),
-                                     overlaySize.width(), overlaySize.height());
-            m_hintOverlay.paint(painter, overlayBounds);
-        }
-    }
+    if (framed && m_hintsVisible)
+        m_hintOverlay.paintKeyLabels(painter, size());
 }
+
+void EmulatorWidget::setViewMode(EmulatorViewMode mode) {
+    if (m_viewMode == mode)
+        return;
+    m_viewMode = mode;
+    QSettings("PocketPartnerProject", "PocketPartner").setValue("emulator/viewMode", mode == EmulatorViewMode::FullScreen ? 1 : 0);
+    update();
+}
+
+void EmulatorWidget::toggleViewMode() { setViewMode(m_viewMode == EmulatorViewMode::ConsoleFrame ? EmulatorViewMode::FullScreen : EmulatorViewMode::ConsoleFrame); }
 
 void EmulatorWidget::setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping) {
     m_mapping = std::move(mapping);
@@ -193,6 +201,12 @@ void EmulatorWidget::keyPressEvent(QKeyEvent* event) {
         event->accept();
         return;
     }
+    if (event->key() == Qt::Key_F2) {
+        if (!event->isAutoRepeat())
+            toggleViewMode();
+        event->accept();
+        return;
+    }
     // An unbound key must do nothing: this used to fall through to Up.
     if (m_engine && !event->isAutoRepeat()) {
         if (const auto btn = buttonForKey(event->key())) {
@@ -206,6 +220,10 @@ void EmulatorWidget::keyPressEvent(QKeyEvent* event) {
 
 void EmulatorWidget::keyReleaseEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_F1) {
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_F2) {
         event->accept();
         return;
     }

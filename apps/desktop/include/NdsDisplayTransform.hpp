@@ -2,6 +2,7 @@
 
 #include <QPoint>
 #include <QRect>
+#include <QRectF>
 #include <QSize>
 #include <optional>
 
@@ -15,6 +16,8 @@ public:
     void setLayout(NdsScreenLayout layout);
     void setViewport(const QSize& widgetSize, qreal devicePixelRatio = 1.0);
     void setScreenSize(const QSize& screenSize);
+    void setTouchScreenRect(const QRectF& rect);
+    void clearTouchScreenRect();
 
     QRect topRect() const;
     QRect bottomRect() const;
@@ -31,6 +34,7 @@ private:
     qreal m_devicePixelRatio{1.0};
     QRect m_topRect;
     QRect m_bottomRect;
+    QRectF m_touchScreenRect;
 };
 
 } // namespace Pocket::App

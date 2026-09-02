@@ -33,6 +33,9 @@ public:
     bool hintsVisible() const { return m_hintsVisible; }
     void setHintsVisible(bool visible);
     void toggleHints();
+    EmulatorViewMode viewMode() const { return m_viewMode; }
+    void setViewMode(EmulatorViewMode mode);
+    void toggleViewMode();
     // Which emulator button a key drives, or nothing when it is unbound.
     std::optional<Pocket::Emulator::EmulatorButton> buttonForKey(int key) const;
 
@@ -56,6 +59,7 @@ private:
     QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
     ControllerHintOverlay m_hintOverlay;
     bool m_hintsVisible{true};
+    EmulatorViewMode m_viewMode{EmulatorViewMode::ConsoleFrame};
 
     AudioSink m_audioSink;
 };

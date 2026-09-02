@@ -11,6 +11,7 @@ private slots:
     void layouts();
     void letterboxAndTouch();
     void dpiAndOutside();
+    void explicitTouchScreenRect();
 };
 
 void NdsDisplayTransformTest::layouts() {
@@ -34,6 +35,21 @@ void NdsDisplayTransformTest::layouts() {
     QVERIFY(transform.topRect().height() > transform.bottomRect().height());
     transform.setLayout(NdsScreenLayout::FocusedBottom);
     QVERIFY(transform.bottomRect().height() > transform.topRect().height());
+}
+
+void NdsDisplayTransformTest::explicitTouchScreenRect() {
+    NdsDisplayTransform transform;
+    const QRectF touchRect(100.0, 300.0, 400.0, 300.0);
+    transform.setTouchScreenRect(touchRect);
+    QCOMPARE(transform.touchAt(QPoint(300, 450)).value(), QPoint(128, 96));
+    QCOMPARE(transform.touchAt(QPoint(100, 300)).value(), QPoint(0, 0));
+    QCOMPARE(transform.touchAt(QPoint(499, 599)).value(), QPoint(255, 191));
+    QVERIFY(!transform.touchAt(QPoint(99, 450)));
+    QVERIFY(!transform.touchAt(QPoint(300, 299)));
+    const QPoint first = transform.touchAt(QPoint(140, 340)).value();
+    const QPoint last = transform.touchAt(QPoint(460, 560)).value();
+    QVERIFY(first.x() < last.x());
+    QVERIFY(first.y() < last.y());
 }
 
 void NdsDisplayTransformTest::letterboxAndTouch() {
