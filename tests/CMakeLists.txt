@@ -115,6 +115,8 @@ add_executable(test_emulator_input_binding
     test_emulator_input_binding.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/EmulatorWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/EmulatorWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/AudioSink.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/AudioSink.cpp
 )
 target_include_directories(test_emulator_input_binding PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
 target_link_libraries(test_emulator_input_binding PRIVATE Qt6::Core Qt6::Test Qt6::Widgets pocket_input pocket_emulator_api pocket_save pocket_core)
@@ -192,3 +194,18 @@ endif()
 
 add_pocket_test(test_libretro_core_session test_libretro_core_session.cpp)
 add_pocket_test(test_audio_ring_buffer test_audio_ring_buffer.cpp)
+
+add_executable(test_audio_sink
+    test_audio_sink.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/AudioSink.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/AudioSink.cpp
+)
+target_include_directories(test_audio_sink PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
+target_link_libraries(test_audio_sink PRIVATE Qt6::Core Qt6::Test pocket_emulator_api)
+if(WIN32)
+    target_link_libraries(test_audio_sink PRIVATE winmm)
+endif()
+add_test(NAME test_audio_sink COMMAND test_audio_sink)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_audio_sink PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+endif()

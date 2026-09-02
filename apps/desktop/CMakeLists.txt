@@ -3,6 +3,7 @@ add_executable(PocketPartner
     include/LibraryWidget.hpp
     include/SettingsWidget.hpp
     include/EmulatorWidget.hpp
+    include/AudioSink.hpp
     include/DiagnosticsWidget.hpp
     include/TrainingTimingBarWidget.hpp
     include/NdsDisplayWidget.hpp
@@ -16,6 +17,7 @@ add_executable(PocketPartner
     src/LibraryWidget.cpp
     src/SettingsWidget.cpp
     src/EmulatorWidget.cpp
+    src/AudioSink.cpp
     src/DiagnosticsWidget.cpp
     src/TrainingTimingBarWidget.cpp
     src/NdsDisplayWidget.cpp

@@ -51,6 +51,7 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
                 m_ndsEngine->stop();
                 m_ndsEngine.reset();
             }
+            m_ndsAudioSink.close();
             QSettings settings("PocketPartnerProject", "PocketPartner");
             m_emulatorWidget->setCoreLibraryPath(settings.value("emulator/mgbaCorePath").toString());
             m_emulatorWidget->setControllerSystem(QString::fromStdString(Core::GameSystemUtils::toString(game.system)));
@@ -61,6 +62,7 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             m_emulatorWidget->stopEmulator();
             if (m_ndsEngine)
                 m_ndsEngine->stop();
+            m_ndsAudioSink.close();
             QSettings settings("PocketPartnerProject", "PocketPartner");
             m_ndsEngine = std::make_unique<Pocket::Emulator::MelonDsEngine>(
                 settings.value("emulator/melonDsCorePath").toString().toStdString());
@@ -81,6 +83,9 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             m_ndsEngine->setVideoFrameCallback([this](const uint8_t* pixels, int width, int height, size_t pitch) {
                 m_ndsDisplayWidget->submitCombinedFrame(pixels, width, height, pitch);
             });
+            m_ndsAudioSink.open(static_cast<int>(m_ndsEngine->sampleRate()));
+            m_ndsEngine->setAudioSampleCallback(
+                [this](const int16_t* samples, size_t frames) { m_ndsAudioSink.submit(samples, frames); });
             m_ndsEngine->start();
             m_emulatorStack->setCurrentWidget(m_ndsDisplayWidget);
             m_ndsDisplayWidget->setFocus();

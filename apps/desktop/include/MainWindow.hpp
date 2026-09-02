@@ -11,6 +11,7 @@
 #include "SettingsWidget.hpp"
 #include "DiagnosticsWidget.hpp"
 #include "EmulatorWidget.hpp"
+#include "AudioSink.hpp"
 #include "NdsDisplayWidget.hpp"
 #include "pocket/emulator/MelonDsEngine.hpp"
 
@@ -32,6 +33,7 @@ private:
     QStackedWidget* m_emulatorStack{nullptr};
     NdsDisplayWidget* m_ndsDisplayWidget{nullptr};
     std::unique_ptr<Pocket::Emulator::MelonDsEngine> m_ndsEngine;
+    AudioSink m_ndsAudioSink;
     std::shared_ptr<Pocket::Input::ControllerMapping> m_controllerMapping;
 };
 
