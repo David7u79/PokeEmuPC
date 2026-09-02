@@ -7,6 +7,9 @@ add_executable(PocketPartner
     include/TrainingTimingBarWidget.hpp
     include/NdsDisplayWidget.hpp
     include/CompanionWidget.hpp
+    include/ControllerArtworkLayer.hpp
+    include/InteractiveControlLayer.hpp
+    include/ControllerMapperWidget.hpp
     src/main.cpp
     src/MainWindow.cpp
     src/LibraryWidget.cpp
@@ -16,6 +19,9 @@ add_executable(PocketPartner
     src/TrainingTimingBarWidget.cpp
     src/NdsDisplayWidget.cpp
     src/CompanionWidget.cpp
+    src/ControllerArtworkLayer.cpp
+    src/InteractiveControlLayer.cpp
+    src/ControllerMapperWidget.cpp
 )
 
 target_include_directories(PocketPartner PRIVATE
@@ -31,11 +37,14 @@ target_link_libraries(PocketPartner PRIVATE
     Qt6::Core
     Qt6::Widgets
     Qt6::Sql
+    Qt6::Svg
+    Qt6::SvgWidgets
     pocket_core
     pocket_storage
     pocket_emulator_api
     pocket_save
     pocket_companion_core
+    pocket_input
 )
 
 if(WIN32)
