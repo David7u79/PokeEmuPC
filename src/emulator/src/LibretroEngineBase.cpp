@@ -3,35 +3,41 @@
 #include <mmsystem.h>
 #endif
 #include "pocket/emulator/LibretroEngineBase.hpp"
+#include "pocket/emulator/LibretroCoreSession.hpp"
 #include <QDebug>
 #include <QFileInfo>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <type_traits>
 
 namespace Pocket::Emulator {
 namespace {
-thread_local LibretroEngineBase* s_callbackEngine = nullptr;
 void videoCallback(const void* d, unsigned w, unsigned h, size_t p) {
-    if (s_callbackEngine)
-        s_callbackEngine->onVideoFrame(d, w, h, p);
+    if (auto* engine = LibretroCoreSession::current())
+        engine->onVideoFrame(d, w, h, p);
 }
 size_t audioBatchCallback(const int16_t* d, size_t f) {
-    return s_callbackEngine ? s_callbackEngine->onAudioSampleBatch(d, f) : f;
+    if (auto* engine = LibretroCoreSession::current())
+        return engine->onAudioSampleBatch(d, f);
+    return f;
 }
 void audioSampleCallback(int16_t l, int16_t r) {
     const int16_t s[] = {l, r};
-    if (s_callbackEngine)
-        s_callbackEngine->onAudioSampleBatch(s, 1);
+    if (auto* engine = LibretroCoreSession::current())
+        engine->onAudioSampleBatch(s, 1);
 }
 void inputPollCallback() {}
 bool environmentCallback(unsigned c, void* d) {
-    return s_callbackEngine && s_callbackEngine->handleEnvironment(c, d);
+    auto* engine = LibretroCoreSession::current();
+    return engine && engine->handleEnvironment(c, d);
 }
 int16_t inputCallback(unsigned p, unsigned d, unsigned i, unsigned id) {
-    return s_callbackEngine ? s_callbackEngine->onInputState(p, d, i, id) : 0;
+    if (auto* engine = LibretroCoreSession::current())
+        return engine->onInputState(p, d, i, id);
+    return 0;
 }
 struct RetroLogCallback {
     void (*log)(int, const char*, ...);
@@ -70,7 +76,13 @@ LibretroEngineBase::LibretroEngineBase(const std::string& path) : m_coreLibraryP
     m_retro_get_system_info(&info);
     m_systemInfo = {info.library_name ? info.library_name : "", info.library_version ? info.library_version : "",
                     info.valid_extensions ? info.valid_extensions : "", info.need_fullpath, info.block_extract};
-    activateCallbackContext();
+    if (!LibretroCoreSession::acquire(this)) {
+        auto* owner = LibretroCoreSession::current();
+        const std::string ownerName = owner ? owner->systemInfo().libraryName : "unknown";
+        m_coreError = "another libretro core is already active (" + ownerName + ")";
+        m_library.unload();
+        return;
+    }
     m_retro_set_environment(environmentCallback);
     m_retro_init();
     m_retro_set_video_refresh(videoCallback);
@@ -78,18 +90,16 @@ LibretroEngineBase::LibretroEngineBase(const std::string& path) : m_coreLibraryP
     m_retro_set_audio_sample_batch(audioBatchCallback);
     m_retro_set_input_poll(inputPollCallback);
     m_retro_set_input_state(inputCallback);
-    deactivateCallbackContext();
     m_hasCore = true;
 }
 LibretroEngineBase::~LibretroEngineBase() {
     stop();
     if (m_hasCore && m_retro_deinit) {
-        activateCallbackContext();
         m_retro_deinit();
-        deactivateCallbackContext();
     }
     if (m_library.isLoaded())
         m_library.unload();
+    LibretroCoreSession::release(this);
 }
 bool LibretroEngineBase::resolveSymbols() {
     auto r = [this](auto& f, const char* n) {
@@ -115,19 +125,11 @@ bool LibretroEngineBase::resolveSymbols() {
     r(m_retro_set_controller_port_device, "retro_set_controller_port_device");
     return m_coreError.empty();
 }
-void LibretroEngineBase::activateCallbackContext() const {
-    s_callbackEngine = const_cast<LibretroEngineBase*>(this);
-}
-void LibretroEngineBase::deactivateCallbackContext() const {
-    if (s_callbackEngine == this)
-        s_callbackEngine = nullptr;
-}
 bool LibretroEngineBase::loadRom(const std::string& path) {
     if (!m_hasCore || m_gameLoaded)
         return false;
     m_romPath = path;
     retro_game_info info{};
-    info.path = m_romPath.c_str();
     if (!m_systemInfo.needFullpath) {
         std::ifstream f(path, std::ios::binary | std::ios::ate);
         if (!f.is_open())
@@ -139,12 +141,9 @@ bool LibretroEngineBase::loadRom(const std::string& path) {
         m_romBuffer.resize(static_cast<size_t>(n));
         if (!f.read(reinterpret_cast<char*>(m_romBuffer.data()), n))
             return false;
-        info.data = m_romBuffer.data();
-        info.size = m_romBuffer.size();
     }
-    activateCallbackContext();
+    info = buildGameInfo(m_romPath.c_str(), m_romBuffer.data(), m_romBuffer.size(), m_systemInfo.needFullpath);
     const bool loaded = m_retro_load_game(&info);
-    deactivateCallbackContext();
     if (!loaded)
         return false;
     m_gameLoaded = true;
@@ -154,6 +153,11 @@ bool LibretroEngineBase::loadRom(const std::string& path) {
         m_fps = av.timing.fps;
     if (av.timing.sample_rate > 0)
         m_sampleRate = av.timing.sample_rate;
+    {
+        std::lock_guard<std::mutex> lock(m_audioQueueMutex);
+        if (m_audioQueueEnabled)
+            m_audioQueue = std::make_unique<AudioRingBuffer>(static_cast<size_t>(std::ceil(m_sampleRate / 10.0)));
+    }
     m_retro_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
     if (!m_sramBuffer.empty()) {
         PersistentGameSave s;
@@ -182,17 +186,13 @@ void LibretroEngineBase::stop() {
     if (m_executionThread.joinable())
         m_executionThread.join();
     if (m_gameLoaded && m_retro_unload_game) {
-        activateCallbackContext();
         m_retro_unload_game();
-        deactivateCallbackContext();
         m_gameLoaded = false;
     }
 }
 void LibretroEngineBase::runFrameUnpaced() {
     if (m_gameLoaded && !m_running) {
-        activateCallbackContext();
         m_retro_run();
-        deactivateCallbackContext();
     }
 }
 void LibretroEngineBase::sendButtonEvent(EmulatorButton b, bool p) {
@@ -205,10 +205,8 @@ PersistentGameSave LibretroEngineBase::getPersistentSave() const {
     std::lock_guard<std::mutex> l(m_stateMutex);
     PersistentGameSave s;
     if (m_gameLoaded && m_retro_get_memory_data && m_retro_get_memory_size) {
-        const_cast<LibretroEngineBase*>(this)->activateCallbackContext();
         void* d = m_retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
         const size_t n = m_retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
-        const_cast<LibretroEngineBase*>(this)->deactivateCallbackContext();
         if (d && n) {
             std::vector<uint8_t> b(n);
             std::memcpy(b.data(), d, n);
@@ -224,10 +222,8 @@ bool LibretroEngineBase::loadPersistentSave(const PersistentGameSave& s) {
         return false;
     std::lock_guard<std::mutex> l(m_stateMutex);
     if (m_gameLoaded && m_retro_get_memory_data && m_retro_get_memory_size) {
-        activateCallbackContext();
         void* d = m_retro_get_memory_data(RETRO_MEMORY_SAVE_RAM);
         const size_t n = m_retro_get_memory_size(RETRO_MEMORY_SAVE_RAM);
-        deactivateCallbackContext();
         if (d && n) {
             std::memcpy(d, s.data().data(), std::min(n, s.size()));
             return true;
@@ -238,9 +234,35 @@ bool LibretroEngineBase::loadPersistentSave(const PersistentGameSave& s) {
 }
 void LibretroEngineBase::onFrameReceived(const uint8_t*, unsigned, unsigned, size_t) {}
 size_t LibretroEngineBase::onAudioSampleBatch(const int16_t* d, size_t f) {
+    std::lock_guard<std::mutex> lock(m_audioQueueMutex);
+    if (m_audioQueueEnabled && m_audioQueue) {
+        m_audioQueue->push(d, f);
+        return f;
+    }
     if (m_audioCallback && d && f)
         m_audioCallback(d, f);
     return f;
+}
+void LibretroEngineBase::setAudioQueueEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lock(m_audioQueueMutex);
+    m_audioQueueEnabled = enabled;
+    if (enabled && !m_audioQueue)
+        m_audioQueue = std::make_unique<AudioRingBuffer>(static_cast<size_t>(std::ceil(m_sampleRate / 10.0)));
+    if (!enabled)
+        m_audioQueue.reset();
+}
+AudioRingBuffer* LibretroEngineBase::audioQueue() {
+    std::lock_guard<std::mutex> lock(m_audioQueueMutex);
+    return m_audioQueue.get();
+}
+retro_game_info LibretroEngineBase::buildGameInfo(const char* path, const void* data, size_t size, bool needFullpath) {
+    retro_game_info info{};
+    info.path = path;
+    if (!needFullpath) {
+        info.data = data;
+        info.size = size;
+    }
+    return info;
 }
 void LibretroEngineBase::onVideoFrame(const void* d, unsigned w, unsigned h, size_t pitch) {
     if (!d || !w || !h)
@@ -319,6 +341,7 @@ int16_t LibretroEngineBase::onInputState(unsigned, unsigned device, unsigned, un
 }
 bool LibretroEngineBase::handleEnvironment(unsigned c, void* d) {
     switch (c) {
+    // SUPPORTED: Pocket supplies the requested data or applies the requested setting.
     case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:
         if (!d)
             return false;
@@ -343,6 +366,7 @@ bool LibretroEngineBase::handleEnvironment(unsigned c, void* d) {
         if (d)
             static_cast<retro_variable*>(d)->value = nullptr;
         return false;
+    // SAFE_NOOP: accepted metadata which does not need runtime action in Pocket.
     case RETRO_ENVIRONMENT_SET_VARIABLES:
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
@@ -351,9 +375,13 @@ bool LibretroEngineBase::handleEnvironment(unsigned c, void* d) {
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
+    case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
     case RETRO_ENVIRONMENT_SET_GEOMETRY:
+    case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO:
+    case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
     case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
         return true;
+    // SUPPORTED: Pocket supplies a stable value to the core.
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
         if (!d)
             return false;
@@ -371,14 +399,21 @@ bool LibretroEngineBase::handleEnvironment(unsigned c, void* d) {
         static_cast<RetroLogCallback*>(d)->log = retroLog;
         return true;
     default:
-        return handleEnvironmentExtra(c, d);
+        if (handleEnvironmentExtra(c, d))
+            return true;
+        // UNSUPPORTED: report each command once; GET_VARIABLE_UPDATE is intentionally silent above.
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            if (m_unknownEnvironmentCommands.insert(c).second)
+                qDebug() << "Unsupported libretro environment command:" << c;
+        }
+        return false;
     }
 }
 void LibretroEngineBase::executionLoop() {
     using clock = std::chrono::steady_clock;
     const auto interval = std::chrono::microseconds((long long)(1000000.0 / m_fps));
     auto next = clock::now();
-    activateCallbackContext();
 #ifdef _WIN32
     timeBeginPeriod(1);
 #endif
@@ -401,6 +436,5 @@ void LibretroEngineBase::executionLoop() {
 #ifdef _WIN32
     timeEndPeriod(1);
 #endif
-    deactivateCallbackContext();
 }
 } // namespace Pocket::Emulator

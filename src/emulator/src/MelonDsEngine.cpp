@@ -53,17 +53,20 @@ void MelonDsEngine::onFrameReceived(const uint8_t* pixels, unsigned width, unsig
     if (!pixels || height < 2)
         return;
     const unsigned screenHeight = height / 2;
-    std::vector<uint8_t> top((size_t)width * screenHeight * 4), bottom((size_t)width * (height - screenHeight) * 4);
+    std::lock_guard<std::mutex> lock(m_stateMutex);
+    const size_t topSize = static_cast<size_t>(width) * screenHeight * 4;
+    const size_t bottomSize = static_cast<size_t>(width) * (height - screenHeight) * 4;
+    if (m_topFramebuffer.size() != topSize)
+        m_topFramebuffer.resize(topSize);
+    if (m_bottomFramebuffer.size() != bottomSize)
+        m_bottomFramebuffer.resize(bottomSize);
     for (unsigned y = 0; y < screenHeight; ++y)
-        std::memcpy(top.data() + (size_t)y * width * 4, pixels + (size_t)y * pitch, (size_t)width * 4);
+        std::memcpy(m_topFramebuffer.data() + (size_t)y * width * 4, pixels + (size_t)y * pitch, (size_t)width * 4);
     for (unsigned y = screenHeight; y < height; ++y)
-        std::memcpy(bottom.data() + (size_t)(y - screenHeight) * width * 4, pixels + (size_t)y * pitch,
+        std::memcpy(m_bottomFramebuffer.data() + (size_t)(y - screenHeight) * width * 4, pixels + (size_t)y * pitch,
                     (size_t)width * 4);
-    std::lock_guard<std::mutex> l(m_stateMutex);
     m_frameWidth = width;
     m_frameHeight = height;
-    m_topFramebuffer = std::move(top);
-    m_bottomFramebuffer = std::move(bottom);
 }
 void MelonDsEngine::sendTouchInput(int x, int y, bool pressed) {
     std::lock_guard<std::mutex> l(m_stateMutex);

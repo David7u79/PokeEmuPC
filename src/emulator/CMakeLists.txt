@@ -6,6 +6,8 @@ add_library(pocket_emulator_api STATIC
     src/LibretroEngineBase.cpp
     src/MgbaEngine.cpp
     src/MelonDsEngine.cpp
+    src/LibretroCoreSession.cpp
+    src/AudioRingBuffer.cpp
 )
 
 target_include_directories(pocket_emulator_api PUBLIC

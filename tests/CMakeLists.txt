@@ -75,6 +75,8 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_melonds_engine PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
 
+
+
 add_pocket_test(test_melonds_engine_real test_melonds_engine_real.cpp)
 
 add_pocket_test(test_controller_layout test_controller_layout.cpp)
@@ -174,3 +176,6 @@ add_test(NAME test_companion_widget_performance COMMAND test_companion_widget_pe
 if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_companion_widget_performance PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
+
+add_pocket_test(test_libretro_core_session test_libretro_core_session.cpp)
+add_pocket_test(test_audio_ring_buffer test_audio_ring_buffer.cpp)

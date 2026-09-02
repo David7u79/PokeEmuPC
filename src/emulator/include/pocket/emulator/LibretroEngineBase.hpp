@@ -1,12 +1,15 @@
 #pragma once
 
 #include "pocket/emulator/EmulatorEngine.hpp"
+#include "pocket/emulator/AudioRingBuffer.hpp"
 #include "pocket/emulator/Ilibretro.h"
 #include <QLibrary>
 #include <QTemporaryDir>
 #include <array>
 #include <atomic>
+#include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -39,6 +42,8 @@ public:
     bool loadPersistentSave(const PersistentGameSave& save) override;
     void setVideoFrameCallback(VideoFrameCallback callback) override { m_videoCallback = std::move(callback); }
     void setAudioSampleCallback(AudioSampleCallback callback) override { m_audioCallback = std::move(callback); }
+    void setAudioQueueEnabled(bool enabled);
+    AudioRingBuffer* audioQueue();
     void onVideoFrame(const void* data, unsigned width, unsigned height, size_t pitch);
     size_t onAudioSampleBatch(const int16_t* data, size_t frames);
     virtual int16_t onInputState(unsigned port, unsigned device, unsigned index, unsigned id);
@@ -51,6 +56,7 @@ protected:
         return false;
     }
     virtual void onFrameReceived(const uint8_t* pixels, unsigned width, unsigned height, size_t pitch);
+    static retro_game_info buildGameInfo(const char* path, const void* data, size_t size, bool needFullpath);
     virtual void afterGameLoaded() {}
     std::atomic<int> m_pixelFormat{RETRO_PIXEL_FORMAT_XRGB8888};
     std::array<bool, 16> m_buttonStates{};
@@ -62,8 +68,6 @@ protected:
 private:
     void executionLoop();
     bool resolveSymbols();
-    void activateCallbackContext() const;
-    void deactivateCallbackContext() const;
     std::string m_coreLibraryPath, m_coreError, m_workDirectoryPath;
     QLibrary m_library;
     QTemporaryDir m_workDirectory;
@@ -74,6 +78,10 @@ private:
     std::thread m_executionThread;
     VideoFrameCallback m_videoCallback;
     AudioSampleCallback m_audioCallback;
+    std::unique_ptr<AudioRingBuffer> m_audioQueue;
+    bool m_audioQueueEnabled{false};
+    mutable std::mutex m_audioQueueMutex;
+    std::set<unsigned> m_unknownEnvironmentCommands;
     std::vector<uint8_t> m_sramBuffer, m_romBuffer;
     void (*m_retro_get_system_info)(retro_system_info*){nullptr};
     void (*m_retro_init)(void){nullptr};
