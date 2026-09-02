@@ -53,8 +53,14 @@ void EmulatorWidget::writeAudioSamples(const int16_t* samples, size_t frames) {
     size_t sampleCount = frames * 2; // stereo
     auto& buffer = m_audioBuffers[m_currentBufferIndex];
     if (buffer.size() != sampleCount) {
+        // Resizing moves the buffer, and the header is prepared against the old
+        // address: re-prepare it or the driver reads freed memory.
+        waveOutUnprepareHeader(m_waveOut, &hdr, sizeof(WAVEHDR));
         buffer.resize(sampleCount);
         hdr.lpData = reinterpret_cast<LPSTR>(buffer.data());
+        hdr.dwBufferLength = static_cast<DWORD>(sampleCount * sizeof(int16_t));
+        hdr.dwFlags = 0;
+        waveOutPrepareHeader(m_waveOut, &hdr, sizeof(WAVEHDR));
     }
     std::memcpy(buffer.data(), samples, sampleCount * sizeof(int16_t));
 
