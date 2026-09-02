@@ -5,6 +5,8 @@
 #include <QKeyEvent>
 #include <QRect>
 #include <QWidget>
+#include <QTimer>
+#include "ControllerHintOverlay.hpp"
 #include "NdsDisplayTransform.hpp"
 #include "pocket/emulator/EmulatorEngine.hpp"
 #include "pocket/input/ControllerMapping.hpp"
@@ -28,6 +30,9 @@ public:
     void submitCombinedFrame(const uint8_t* pixels, int width, int height, size_t pitch);
     void setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping);
     void refreshKeyBindings();
+    bool hintsVisible() const { return m_hintsVisible; }
+    void setHintsVisible(bool visible);
+    void toggleHints();
 
     // Calculate bounding rects for current widget size
     void calculateScreenRects(const QRect& totalBounds, QRect& outTopRect, QRect& outBottomRect) const;
@@ -58,6 +63,9 @@ private:
     std::atomic_bool m_framesEnabled{false};
     std::shared_ptr<Pocket::Input::ControllerMapping> m_mapping;
     QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
+    ControllerHintOverlay m_hintOverlay;
+    QTimer m_hintTimer;
+    bool m_hintsVisible{false};
 
     QRect m_currentTopRect;
     QRect m_currentBottomRect;

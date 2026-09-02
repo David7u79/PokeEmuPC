@@ -7,9 +7,11 @@
 #include <mutex>
 
 #include "AudioSink.hpp"
+#include "ControllerHintOverlay.hpp"
 #include "pocket/emulator/MgbaEngine.hpp"
 #include "pocket/input/ControllerMapping.hpp"
 #include <QHash>
+#include <QTimer>
 
 namespace Pocket::App {
 
@@ -28,6 +30,9 @@ public:
     void setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping);
     void setControllerSystem(const QString& system);
     void refreshKeyBindings();
+    bool hintsVisible() const { return m_hintsVisible; }
+    void setHintsVisible(bool visible);
+    void toggleHints();
     // Which emulator button a key drives, or nothing when it is unbound.
     std::optional<Pocket::Emulator::EmulatorButton> buttonForKey(int key) const;
 
@@ -49,6 +54,9 @@ private:
     std::shared_ptr<Pocket::Input::ControllerMapping> m_mapping;
     QString m_controllerSystem{"GBA"};
     QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
+    ControllerHintOverlay m_hintOverlay;
+    QTimer m_hintTimer;
+    bool m_hintsVisible{false};
 
     AudioSink m_audioSink;
 };
