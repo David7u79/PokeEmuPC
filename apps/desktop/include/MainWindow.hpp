@@ -23,7 +23,13 @@ public:
     MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager,
                std::shared_ptr<Pocket::Storage::GameRepository> gameRepo, QWidget* parent = nullptr);
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
 private:
+    // Flushes cartridge SRAM to disk before the core is torn down.
+    void stopNdsEngine();
+
     QTabWidget* m_tabWidget{nullptr};
     LibraryWidget* m_libraryWidget{nullptr};
     CompanionWidget* m_companionWidget{nullptr};

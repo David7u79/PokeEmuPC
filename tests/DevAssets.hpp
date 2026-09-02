@@ -42,7 +42,8 @@ inline QString find(const char* envVar, const QStringList& patterns)
 inline QString melonDsCore() { return find("POCKET_MELONDSDS_CORE", {"melondsds_libretro.dll", "melondsds_libretro.so"}); }
 inline QString mgbaCore()    { return find("POCKET_MGBA_CORE", {"mgba_libretro.dll", "mgba_libretro.so"}); }
 inline QString ndsRom()      { return find("POCKET_NDS_ROM", {"*.nds"}); }
-inline QString ndsSave()     { return find("POCKET_NDS_SAVE", {"*.dsv", "*.srm"}); }
+// "*.nds.sav" is what MelonDsEngine writes; plain "*.sav" would also match a GBA save.
+inline QString ndsSave()     { return find("POCKET_NDS_SAVE", {"*.nds.sav", "*.dsv", "*.srm"}); }
 
 // Libretro system dir for BIOS/firmware. Empty when the developer has none:
 // melonDS DS boots retail carts without them, so this is not a hard blocker.

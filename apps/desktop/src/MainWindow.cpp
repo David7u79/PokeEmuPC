@@ -47,11 +47,7 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
     connect(m_libraryWidget, &LibraryWidget::gameSelected, this, [this](const Core::Game& game) {
         if (game.system == Core::GameSystem::GB || game.system == Core::GameSystem::GBC ||
             game.system == Core::GameSystem::GBA) {
-            if (m_ndsEngine) {
-                m_ndsEngine->stop();
-                m_ndsEngine.reset();
-            }
-            m_ndsAudioSink.close();
+            stopNdsEngine();
             QSettings settings("PocketPartnerProject", "PocketPartner");
             m_emulatorWidget->setCoreLibraryPath(settings.value("emulator/mgbaCorePath").toString());
             m_emulatorWidget->setControllerSystem(QString::fromStdString(Core::GameSystemUtils::toString(game.system)));
@@ -60,9 +56,7 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             m_tabWidget->setCurrentWidget(m_emulatorStack);
         } else if (game.system == Core::GameSystem::NDS) {
             m_emulatorWidget->stopEmulator();
-            if (m_ndsEngine)
-                m_ndsEngine->stop();
-            m_ndsAudioSink.close();
+            stopNdsEngine();
             QSettings settings("PocketPartnerProject", "PocketPartner");
             m_ndsEngine = std::make_unique<Pocket::Emulator::MelonDsEngine>(
                 settings.value("emulator/melonDsCorePath").toString().toStdString());
@@ -80,6 +74,12 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
                 m_tabWidget->setCurrentWidget(m_emulatorStack);
                 return;
             }
+            // Only after loadRom: the core exposes no save RAM until a game is loaded.
+            Pocket::Emulator::PersistentGameSave existingSave;
+            if (existingSave.loadFromFile(m_ndsEngine->saveFilePath())) {
+                m_ndsEngine->loadPersistentSave(existingSave);
+            }
+
             m_ndsEngine->setVideoFrameCallback([this](const uint8_t* pixels, int width, int height, size_t pitch) {
                 m_ndsDisplayWidget->submitCombinedFrame(pixels, width, height, pitch);
             });
@@ -111,6 +111,30 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
                 if (m_ndsEngine)
                     m_ndsEngine->sendButtonEvent(button, pressed);
             });
+}
+
+void MainWindow::stopNdsEngine() {
+    if (m_ndsEngine) {
+        // Read the path before stop(), which clears it, and flush before the core
+        // is destroyed: otherwise the whole play session is lost on exit.
+        const std::string savePath = m_ndsEngine->saveFilePath();
+        if (!savePath.empty()) {
+            const Pocket::Emulator::PersistentGameSave save = m_ndsEngine->getPersistentSave();
+            if (!save.isEmpty()) {
+                save.saveToFile(savePath);
+            }
+        }
+        m_ndsEngine->stop();
+        m_ndsEngine.reset();
+    }
+    m_ndsAudioSink.close();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    // Closing the window with a game running must still persist it.
+    m_emulatorWidget->stopEmulator();
+    stopNdsEngine();
+    QMainWindow::closeEvent(event);
 }
 
 } // namespace Pocket::App
