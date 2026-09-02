@@ -1,4 +1,5 @@
 #include "EmulatorWidget.hpp"
+#include "pocket/input/ControllerLayout.hpp"
 #include <QPainter>
 #include <QDebug>
 #include <QFileInfo>
@@ -186,47 +187,62 @@ void EmulatorWidget::paintEvent(QPaintEvent *) {
     }
 }
 
-Pocket::Emulator::EmulatorButton EmulatorWidget::mapKeyToButton(int key) const {
-    switch (key) {
-        case Qt::Key_Up:
-        case Qt::Key_W:      return Pocket::Emulator::EmulatorButton::Up;
-        case Qt::Key_Down:
-        case Qt::Key_S:      return Pocket::Emulator::EmulatorButton::Down;
-        case Qt::Key_Left:
-        case Qt::Key_A:      return Pocket::Emulator::EmulatorButton::Left;
-        case Qt::Key_Right:
-        case Qt::Key_D:      return Pocket::Emulator::EmulatorButton::Right;
-        case Qt::Key_Z:
-        case Qt::Key_J:      return Pocket::Emulator::EmulatorButton::A;
-        case Qt::Key_X:
-        case Qt::Key_K:      return Pocket::Emulator::EmulatorButton::B;
-        case Qt::Key_U:      return Pocket::Emulator::EmulatorButton::L;
-        case Qt::Key_I:      return Pocket::Emulator::EmulatorButton::R;
-        case Qt::Key_Return: return Pocket::Emulator::EmulatorButton::Start;
-        case Qt::Key_Shift:
-        case Qt::Key_Space:  return Pocket::Emulator::EmulatorButton::Select;
-        default:             return Pocket::Emulator::EmulatorButton::Up;
+void EmulatorWidget::setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping) {
+    m_mapping = std::move(mapping);
+    refreshKeyBindings();
+}
+
+void EmulatorWidget::setControllerSystem(const QString& system) {
+    if (m_controllerSystem == system) return;
+    m_controllerSystem = system;
+    refreshKeyBindings();
+}
+
+void EmulatorWidget::refreshKeyBindings() {
+    // Flattened once per mapping change so a keypress is a hash lookup, not a scan.
+    m_keyBindings.clear();
+    if (!m_mapping) return;
+
+    const auto layout = Pocket::Input::ControllerLayout::forSystem(m_controllerSystem);
+    if (!layout) return;
+
+    for (const auto& control : layout->controls()) {
+        const auto button = Pocket::Input::ControllerMapping::emulatorButtonFor(control.id);
+        if (!button) continue; // touchscreen, microphone, lid
+        const auto binding = m_mapping->binding(m_controllerSystem, control.id);
+        if (binding && binding->device == Pocket::Input::InputDevice::Keyboard) {
+            m_keyBindings.insert(binding->code, *button);
+        }
     }
 }
 
+std::optional<Pocket::Emulator::EmulatorButton> EmulatorWidget::buttonForKey(int key) const {
+    const auto it = m_keyBindings.constFind(key);
+    if (it == m_keyBindings.constEnd()) return std::nullopt;
+    return it.value();
+}
+
 void EmulatorWidget::keyPressEvent(QKeyEvent *event) {
+    // An unbound key must do nothing: this used to fall through to Up.
     if (m_engine && !event->isAutoRepeat()) {
-        Pocket::Emulator::EmulatorButton btn = mapKeyToButton(event->key());
-        m_engine->sendButtonEvent(btn, true);
-        event->accept();
-    } else {
-        QWidget::keyPressEvent(event);
+        if (const auto btn = buttonForKey(event->key())) {
+            m_engine->sendButtonEvent(*btn, true);
+            event->accept();
+            return;
+        }
     }
+    QWidget::keyPressEvent(event);
 }
 
 void EmulatorWidget::keyReleaseEvent(QKeyEvent *event) {
     if (m_engine && !event->isAutoRepeat()) {
-        Pocket::Emulator::EmulatorButton btn = mapKeyToButton(event->key());
-        m_engine->sendButtonEvent(btn, false);
-        event->accept();
-    } else {
-        QWidget::keyReleaseEvent(event);
+        if (const auto btn = buttonForKey(event->key())) {
+            m_engine->sendButtonEvent(*btn, false);
+            event->accept();
+            return;
+        }
     }
+    QWidget::keyReleaseEvent(event);
 }
 
 } // namespace Pocket::App

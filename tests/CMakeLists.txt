@@ -94,6 +94,21 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_controller_mapper_widget PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
 
+add_executable(test_emulator_input_binding
+    test_emulator_input_binding.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/EmulatorWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/EmulatorWidget.cpp
+)
+target_include_directories(test_emulator_input_binding PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
+target_link_libraries(test_emulator_input_binding PRIVATE Qt6::Core Qt6::Test Qt6::Widgets pocket_input pocket_emulator_api pocket_save pocket_core)
+if(WIN32)
+    target_link_libraries(test_emulator_input_binding PRIVATE winmm)
+endif()
+add_test(NAME test_emulator_input_binding COMMAND test_emulator_input_binding)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_emulator_input_binding PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+endif()
+
 add_executable(test_controller_artwork test_controller_artwork.cpp)
 target_link_libraries(test_controller_artwork PRIVATE Qt6::Core Qt6::Test Qt6::Gui Qt6::Svg pocket_input)
 add_test(NAME test_controller_artwork COMMAND test_controller_artwork)

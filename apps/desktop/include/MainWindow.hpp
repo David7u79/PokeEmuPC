@@ -27,6 +27,7 @@ private:
     SettingsWidget *m_settingsWidget{nullptr};
     DiagnosticsWidget *m_diagnosticsWidget{nullptr};
     EmulatorWidget *m_emulatorWidget{nullptr};
+    std::shared_ptr<Pocket::Input::ControllerMapping> m_controllerMapping;
 };
 
 } // namespace Pocket::App

@@ -5,13 +5,18 @@
 #include <QLineEdit>
 #include <memory>
 #include "pocketpartner/storage/DatabaseManager.hpp"
+#include "ControllerMapperWidget.hpp"
 
 namespace Pocket::App {
 
 class SettingsWidget : public QWidget {
     Q_OBJECT
 public:
-    explicit SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager, QWidget *parent = nullptr);
+    SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager,
+                   std::shared_ptr<Pocket::Input::ControllerMapping> mapping,
+                   QWidget *parent = nullptr);
+
+    ControllerMapperWidget* controllerMapper() const { return m_controllerMapper; }
 
 signals:
     void coreLibraryPathChanged(const QString& path);
@@ -26,6 +31,7 @@ private:
     QLabel *m_versionLabel{nullptr};
     QLineEdit *m_corePathEdit{nullptr};
     QLabel *m_coreStatusLabel{nullptr};
+    ControllerMapperWidget *m_controllerMapper{nullptr};
 };
 
 } // namespace Pocket::App

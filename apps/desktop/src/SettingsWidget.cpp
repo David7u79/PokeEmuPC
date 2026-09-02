@@ -10,13 +10,17 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QSettings>
+#include <QTabWidget>
 
 namespace Pocket::App {
 
-SettingsWidget::SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager, QWidget *parent)
+SettingsWidget::SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager,
+                               std::shared_ptr<Pocket::Input::ControllerMapping> mapping,
+                               QWidget *parent)
     : QWidget(parent), m_db(std::move(dbManager)) {
 
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    QWidget *generalPage = new QWidget(this);
+    QVBoxLayout *mainLayout = new QVBoxLayout(generalPage);
 
     QLabel *headerLabel = new QLabel("<h2>Application Settings & Synchronization</h2>", this);
     mainLayout->addWidget(headerLabel);
@@ -70,6 +74,16 @@ SettingsWidget::SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseM
 
     mainLayout->addWidget(dbGroup);
     mainLayout->addStretch();
+
+    m_controllerMapper = new ControllerMapperWidget(std::move(mapping), this);
+
+    QTabWidget *tabs = new QTabWidget(this);
+    tabs->addTab(generalPage, "General");
+    tabs->addTab(m_controllerMapper, "Controls");
+
+    QVBoxLayout *outerLayout = new QVBoxLayout(this);
+    outerLayout->setContentsMargins(0, 0, 0, 0);
+    outerLayout->addWidget(tabs);
 }
 
 void SettingsWidget::browseCoreLibrary() {

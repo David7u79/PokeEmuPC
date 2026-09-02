@@ -12,6 +12,8 @@
 #endif
 
 #include "pocket/emulator/MgbaEngine.hpp"
+#include "pocket/input/ControllerMapping.hpp"
+#include <QHash>
 
 namespace Pocket::App {
 
@@ -26,6 +28,13 @@ public:
     void setCoreLibraryPath(const QString& path);
     void setStatusMessage(const QString& message);
 
+    // The bindings the user configured in Settings -> Controls.
+    void setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping);
+    void setControllerSystem(const QString& system);
+    void refreshKeyBindings();
+    // Which emulator button a key drives, or nothing when it is unbound.
+    std::optional<Pocket::Emulator::EmulatorButton> buttonForKey(int key) const;
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
@@ -35,7 +44,6 @@ private slots:
     void onFrameReady();
 
 private:
-    Pocket::Emulator::EmulatorButton mapKeyToButton(int key) const;
     void initAudio(int sampleRate);
     void writeAudioSamples(const int16_t* samples, size_t frames);
     void closeAudio();
@@ -46,6 +54,9 @@ private:
     QString m_savePath;
     QString m_coreLibraryPath;
     QString m_statusMessage{"No ROM loaded"};
+    std::shared_ptr<Pocket::Input::ControllerMapping> m_mapping;
+    QString m_controllerSystem{"GBA"};
+    QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
 
 #ifdef _WIN32
     HWAVEOUT m_waveOut{nullptr};
