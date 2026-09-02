@@ -4,13 +4,94 @@
 #include <cstring>
 
 namespace Pocket::Emulator {
-MelonDsEngine::MelonDsEngine(const std::string& core, std::shared_ptr<Pocket::Save::SaveSessionCoordinator> coordinator) : LibretroEngineBase(core), m_saveCoordinator(std::move(coordinator)) {}
-MelonDsEngine::~MelonDsEngine(){ stop(); }
-bool MelonDsEngine::loadRom(const std::string& path){ if(!hasCore())return false; if(m_gameLoaded)stop(); const std::string save=path+".sav"; if(!m_saveCoordinator||!m_saveCoordinator->acquireEmulatorLock(save))return false; if(!LibretroEngineBase::loadRom(path)){m_saveCoordinator->releaseEmulatorLock(save);return false;}m_savePath=save;return true; }
-void MelonDsEngine::stop(){const bool wasLoaded=m_gameLoaded;LibretroEngineBase::stop();if(wasLoaded&&!m_savePath.empty()&&m_saveCoordinator)m_saveCoordinator->releaseEmulatorLock(m_savePath);m_savePath.clear();std::lock_guard<std::mutex>l(m_stateMutex);m_topFramebuffer.clear();m_bottomFramebuffer.clear();m_frameWidth=m_frameHeight=0;}
-const uint8_t* MelonDsEngine::topFramebuffer()const{std::lock_guard<std::mutex>l(m_stateMutex);return m_topFramebuffer.empty()?nullptr:m_topFramebuffer.data();}const uint8_t* MelonDsEngine::bottomFramebuffer()const{std::lock_guard<std::mutex>l(m_stateMutex);return m_bottomFramebuffer.empty()?nullptr:m_bottomFramebuffer.data();}size_t MelonDsEngine::screenFramebufferSize()const{std::lock_guard<std::mutex>l(m_stateMutex);return m_topFramebuffer.size();}
-void MelonDsEngine::afterGameLoaded(){/* The initial geometry is refreshed on every actual video frame. */}
-void MelonDsEngine::onFrameReceived(const uint8_t* pixels,unsigned width,unsigned height,size_t pitch){if(!pixels||height<2)return;const unsigned screenHeight=height/2;std::vector<uint8_t> top((size_t)width*screenHeight*4),bottom((size_t)width*(height-screenHeight)*4);for(unsigned y=0;y<screenHeight;++y)std::memcpy(top.data()+(size_t)y*width*4,pixels+(size_t)y*pitch,(size_t)width*4);for(unsigned y=screenHeight;y<height;++y)std::memcpy(bottom.data()+(size_t)(y-screenHeight)*width*4,pixels+(size_t)y*pitch,(size_t)width*4);std::lock_guard<std::mutex>l(m_stateMutex);m_frameWidth=width;m_frameHeight=height;m_topFramebuffer=std::move(top);m_bottomFramebuffer=std::move(bottom);}
-void MelonDsEngine::sendTouchInput(int x,int y,bool pressed){std::lock_guard<std::mutex>l(m_stateMutex);m_touchX=std::clamp(x,0,255);m_touchY=std::clamp(y,0,191);m_touchPressed=pressed;}void MelonDsEngine::getTouchInput(int&x,int&y,bool&p)const{std::lock_guard<std::mutex>l(m_stateMutex);x=m_touchX;y=m_touchY;p=m_touchPressed;}
-int16_t MelonDsEngine::onInputState(unsigned port,unsigned device,unsigned index,unsigned id){if(device==RETRO_DEVICE_POINTER){std::lock_guard<std::mutex>l(m_stateMutex);if(id==RETRO_DEVICE_ID_POINTER_PRESSED)return m_touchPressed?1:0;const unsigned totalHeight=m_frameHeight?m_frameHeight:384, screenHeight=totalHeight/2; if(id==RETRO_DEVICE_ID_POINTER_X)return static_cast<int16_t>(std::lround((double)m_touchX*65534.0/255.0-32767.0));if(id==RETRO_DEVICE_ID_POINTER_Y)return static_cast<int16_t>(std::lround((double)(screenHeight+std::min<unsigned>(m_touchY,screenHeight?screenHeight-1:0))*65534.0/std::max(1U,totalHeight-1)-32767.0));return 0;}return LibretroEngineBase::onInputState(port,device,index,id);}
+MelonDsEngine::MelonDsEngine(const std::string& core, std::shared_ptr<Pocket::Save::SaveSessionCoordinator> coordinator)
+    : LibretroEngineBase(core), m_saveCoordinator(std::move(coordinator)) {}
+MelonDsEngine::~MelonDsEngine() {
+    stop();
+}
+bool MelonDsEngine::loadRom(const std::string& path) {
+    if (!hasCore())
+        return false;
+    if (m_gameLoaded)
+        stop();
+    const std::string save = path + ".sav";
+    if (!m_saveCoordinator || !m_saveCoordinator->acquireEmulatorLock(save))
+        return false;
+    if (!LibretroEngineBase::loadRom(path)) {
+        m_saveCoordinator->releaseEmulatorLock(save);
+        return false;
+    }
+    m_savePath = save;
+    return true;
+}
+void MelonDsEngine::stop() {
+    const bool wasLoaded = m_gameLoaded;
+    LibretroEngineBase::stop();
+    if (wasLoaded && !m_savePath.empty() && m_saveCoordinator)
+        m_saveCoordinator->releaseEmulatorLock(m_savePath);
+    m_savePath.clear();
+    std::lock_guard<std::mutex> l(m_stateMutex);
+    m_topFramebuffer.clear();
+    m_bottomFramebuffer.clear();
+    m_frameWidth = m_frameHeight = 0;
+}
+const uint8_t* MelonDsEngine::topFramebuffer() const {
+    std::lock_guard<std::mutex> l(m_stateMutex);
+    return m_topFramebuffer.empty() ? nullptr : m_topFramebuffer.data();
+}
+const uint8_t* MelonDsEngine::bottomFramebuffer() const {
+    std::lock_guard<std::mutex> l(m_stateMutex);
+    return m_bottomFramebuffer.empty() ? nullptr : m_bottomFramebuffer.data();
+}
+size_t MelonDsEngine::screenFramebufferSize() const {
+    std::lock_guard<std::mutex> l(m_stateMutex);
+    return m_topFramebuffer.size();
+}
+void MelonDsEngine::afterGameLoaded() { /* The initial geometry is refreshed on every actual video frame. */
+}
+void MelonDsEngine::onFrameReceived(const uint8_t* pixels, unsigned width, unsigned height, size_t pitch) {
+    if (!pixels || height < 2)
+        return;
+    const unsigned screenHeight = height / 2;
+    std::vector<uint8_t> top((size_t)width * screenHeight * 4), bottom((size_t)width * (height - screenHeight) * 4);
+    for (unsigned y = 0; y < screenHeight; ++y)
+        std::memcpy(top.data() + (size_t)y * width * 4, pixels + (size_t)y * pitch, (size_t)width * 4);
+    for (unsigned y = screenHeight; y < height; ++y)
+        std::memcpy(bottom.data() + (size_t)(y - screenHeight) * width * 4, pixels + (size_t)y * pitch,
+                    (size_t)width * 4);
+    std::lock_guard<std::mutex> l(m_stateMutex);
+    m_frameWidth = width;
+    m_frameHeight = height;
+    m_topFramebuffer = std::move(top);
+    m_bottomFramebuffer = std::move(bottom);
+}
+void MelonDsEngine::sendTouchInput(int x, int y, bool pressed) {
+    std::lock_guard<std::mutex> l(m_stateMutex);
+    m_touchX = std::clamp(x, 0, 255);
+    m_touchY = std::clamp(y, 0, 191);
+    m_touchPressed = pressed;
+}
+void MelonDsEngine::getTouchInput(int& x, int& y, bool& p) const {
+    std::lock_guard<std::mutex> l(m_stateMutex);
+    x = m_touchX;
+    y = m_touchY;
+    p = m_touchPressed;
+}
+int16_t MelonDsEngine::onInputState(unsigned port, unsigned device, unsigned index, unsigned id) {
+    if (device == RETRO_DEVICE_POINTER) {
+        std::lock_guard<std::mutex> l(m_stateMutex);
+        if (id == RETRO_DEVICE_ID_POINTER_PRESSED)
+            return m_touchPressed ? 1 : 0;
+        const unsigned totalHeight = m_frameHeight ? m_frameHeight : 384, screenHeight = totalHeight / 2;
+        if (id == RETRO_DEVICE_ID_POINTER_X)
+            return static_cast<int16_t>(std::lround((double)m_touchX * 65534.0 / 255.0 - 32767.0));
+        if (id == RETRO_DEVICE_ID_POINTER_Y)
+            return static_cast<int16_t>(
+                std::lround((double)(screenHeight + std::min<unsigned>(m_touchY, screenHeight ? screenHeight - 1 : 0)) *
+                                65534.0 / std::max(1U, totalHeight - 1) -
+                            32767.0));
+        return 0;
+    }
+    return LibretroEngineBase::onInputState(port, device, index, id);
+}
 } // namespace Pocket::Emulator

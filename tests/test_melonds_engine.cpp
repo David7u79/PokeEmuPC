@@ -60,7 +60,7 @@ private slots:
     }
 };
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     TestMelonDsEngine tc;
     return QTest::qExec(&tc, argc, argv);
