@@ -194,6 +194,19 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
 endif()
 
 add_pocket_test(test_libretro_core_session test_libretro_core_session.cpp)
+add_pocket_test(test_libretro_core_probe test_libretro_core_probe.cpp)
+
+add_executable(test_cores_widget
+    test_cores_widget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/CoresWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/CoresWidget.cpp
+)
+target_include_directories(test_cores_widget PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
+target_link_libraries(test_cores_widget PRIVATE Qt6::Core Qt6::Test Qt6::Widgets pocket_core pocket_emulator_api)
+add_test(NAME test_cores_widget COMMAND test_cores_widget)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_cores_widget PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+endif()
 add_pocket_test(test_audio_ring_buffer test_audio_ring_buffer.cpp)
 
 add_executable(test_audio_sink
