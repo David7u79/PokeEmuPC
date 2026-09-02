@@ -1,40 +1,40 @@
 #include "pocket/emulator/EngineResolver.hpp"
-#include "pocketpartner/emulator/NullEmulatorEngine.hpp"
+#include "pocket/emulator/MelonDsEngine.hpp"
+#include "pocket/emulator/MgbaEngine.hpp"
 
 namespace Pocket::Emulator {
 
-EngineResolver::EngineResolver() {
-    // Default fallback mock engine for initial foundation phase
-    auto nullEngine = std::make_shared<PocketPartner::Emulator::NullEmulatorEngine>();
-    registerEngine(Core::GameSystem::GB, nullEngine);
-    registerEngine(Core::GameSystem::GBC, nullEngine);
-    registerEngine(Core::GameSystem::GBA, nullEngine);
-    registerEngine(Core::GameSystem::NDS, nullEngine);
-}
-
-void EngineResolver::registerEngine(Core::GameSystem system,
-                                     std::shared_ptr<PocketPartner::Emulator::EmulatorEngine> engine) {
-    m_engines[system] = std::move(engine);
-}
-
-std::shared_ptr<PocketPartner::Emulator::EmulatorEngine> EngineResolver::resolve(Core::GameSystem system) const {
-    auto it = m_engines.find(system);
-    if (it != m_engines.end()) {
-        return it->second;
+void EngineResolver::setCorePath(Core::GameSystem system, const std::string& path) {
+    switch (system) {
+    case Core::GameSystem::GB:
+    case Core::GameSystem::GBC:
+    case Core::GameSystem::GBA:
+        m_mgbaCorePath = path;
+        break;
+    case Core::GameSystem::NDS:
+        m_melonDsCorePath = path;
+        break;
+    default:
+        break;
     }
-    return nullptr;
 }
 
-bool EngineResolver::supportsSystem(Core::GameSystem system) const {
-    return m_engines.find(system) != m_engines.end();
-}
-
-std::vector<Core::GameSystem> EngineResolver::supportedSystems() const {
-    std::vector<Core::GameSystem> list;
-    for (const auto& [sys, engine] : m_engines) {
-        list.push_back(sys);
+std::shared_ptr<EmulatorEngine> EngineResolver::createFor(Core::GameSystem system) const {
+    switch (system) {
+    case Core::GameSystem::GB:
+    case Core::GameSystem::GBC:
+    case Core::GameSystem::GBA:
+        return std::make_shared<MgbaEngine>(m_mgbaCorePath);
+    case Core::GameSystem::NDS:
+        return std::make_shared<MelonDsEngine>(m_melonDsCorePath);
+    default:
+        return nullptr;
     }
-    return list;
+}
+
+bool EngineResolver::supports(Core::GameSystem system) const {
+    return system == Core::GameSystem::GB || system == Core::GameSystem::GBC || system == Core::GameSystem::GBA ||
+           system == Core::GameSystem::NDS;
 }
 
 } // namespace Pocket::Emulator

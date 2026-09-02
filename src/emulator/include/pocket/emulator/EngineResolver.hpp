@@ -1,26 +1,20 @@
 #pragma once
 
 #include "pocket/core/GameSystem.hpp"
-#include "pocketpartner/emulator/EmulatorEngine.hpp"
 #include <memory>
-#include <map>
-#include <vector>
 
 namespace Pocket::Emulator {
+class EmulatorEngine;
 
 class EngineResolver {
 public:
-    EngineResolver();
-    ~EngineResolver() = default;
-
-    void registerEngine(Core::GameSystem system, std::shared_ptr<PocketPartner::Emulator::EmulatorEngine> engine);
-    std::shared_ptr<PocketPartner::Emulator::EmulatorEngine> resolve(Core::GameSystem system) const;
-
-    bool supportsSystem(Core::GameSystem system) const;
-    std::vector<Core::GameSystem> supportedSystems() const;
+    void setCorePath(Core::GameSystem system, const std::string& path);
+    std::shared_ptr<EmulatorEngine> createFor(Core::GameSystem system) const;
+    bool supports(Core::GameSystem system) const;
 
 private:
-    std::map<Core::GameSystem, std::shared_ptr<PocketPartner::Emulator::EmulatorEngine>> m_engines;
+    std::string m_mgbaCorePath;
+    std::string m_melonDsCorePath;
 };
 
 } // namespace Pocket::Emulator

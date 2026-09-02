@@ -55,7 +55,9 @@ add_pocket_test(test_mgba_engine test_mgba_engine.cpp)
 add_executable(test_melonds_engine
     test_melonds_engine.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/NdsDisplayWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/NdsDisplayTransform.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/NdsDisplayWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/NdsDisplayTransform.cpp
 )
 target_include_directories(test_melonds_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/desktop/include
@@ -69,10 +71,23 @@ target_link_libraries(test_melonds_engine PRIVATE
     pocket_emulator_api
     pocket_save
     pocket_companion_core
+    pocket_input
 )
 add_test(NAME test_melonds_engine COMMAND test_melonds_engine)
 if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_melonds_engine PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+endif()
+
+add_executable(test_nds_display_transform
+    test_nds_display_transform.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/NdsDisplayTransform.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/NdsDisplayTransform.cpp
+)
+target_include_directories(test_nds_display_transform PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
+target_link_libraries(test_nds_display_transform PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME test_nds_display_transform COMMAND test_nds_display_transform)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_nds_display_transform PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
 
 add_pocket_test(test_melonds_engine_real test_melonds_engine_real.cpp)

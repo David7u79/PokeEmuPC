@@ -6,6 +6,7 @@ add_executable(PocketPartner
     include/DiagnosticsWidget.hpp
     include/TrainingTimingBarWidget.hpp
     include/NdsDisplayWidget.hpp
+    include/NdsDisplayTransform.hpp
     include/CompanionWidget.hpp
     include/ControllerArtworkLayer.hpp
     include/InteractiveControlLayer.hpp
@@ -18,6 +19,7 @@ add_executable(PocketPartner
     src/DiagnosticsWidget.cpp
     src/TrainingTimingBarWidget.cpp
     src/NdsDisplayWidget.cpp
+    src/NdsDisplayTransform.cpp
     src/CompanionWidget.cpp
     src/ControllerArtworkLayer.cpp
     src/InteractiveControlLayer.cpp

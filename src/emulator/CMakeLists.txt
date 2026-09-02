@@ -3,9 +3,11 @@ add_library(pocket_emulator_api STATIC
     include/pocket/emulator/LibretroEngineBase.hpp
     include/pocket/emulator/MgbaEngine.hpp
     include/pocket/emulator/MelonDsEngine.hpp
+    include/pocket/emulator/EngineResolver.hpp
     src/LibretroEngineBase.cpp
     src/MgbaEngine.cpp
     src/MelonDsEngine.cpp
+    src/EngineResolver.cpp
 )
 
 target_include_directories(pocket_emulator_api PUBLIC
