@@ -21,8 +21,17 @@ void ControllerMapperWidgetTest::resizeAndHitTesting()
     ControllerMapperWidget widget(mapping); widget.resize(400, 300); widget.show(); QVERIFY(QTest::qWaitForWindowExposed(&widget));
     const QRectF first = widget.controlRect("A"); const QRectF artFirst = widget.artworkRect();
     widget.resize(800, 600); QCoreApplication::processEvents(); const QRectF second = widget.controlRect("A"); const QRectF artSecond = widget.artworkRect();
-    QCOMPARE(second.width() / first.width(), 2.0); QCOMPARE(second.height() / first.height(), 2.0);
-    QCOMPARE(artSecond.center(), QPointF(400, (600 + artSecond.top()) / 2.0));
+    // The artwork is fit to the canvas preserving aspect, so doubling the widget
+    // does not necessarily double the drawing: a control must scale with the
+    // artwork rect, whichever axis ends up constraining it.
+    const qreal artScale = artSecond.width() / artFirst.width();
+    QVERIFY(artScale > 1.0);
+    QCOMPARE(second.width() / first.width(), artScale);
+    QCOMPARE(second.height() / first.height(), artSecond.height() / artFirst.height());
+    // Centred horizontally in the widget, and clear of the toolbar row above.
+    QCOMPARE(artSecond.center().x(), 400.0);
+    QVERIFY(artSecond.top() > 0.0);
+    QVERIFY(artSecond.bottom() <= 600.0);
     QTest::mouseClick(&widget, Qt::LeftButton, Qt::NoModifier, second.center().toPoint()); QCOMPARE(widget.selectedControlId(), QString("A"));
     QTest::mouseClick(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(1, 599)); QVERIFY(widget.selectedControlId().isEmpty());
 }

@@ -20,6 +20,7 @@ ControllerMapperWidget::ControllerMapperWidget(std::shared_ptr<ControllerMapping
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
     auto* header = new QHBoxLayout;
+    m_header = header;
     m_systemSelector = new QComboBox(this); m_systemSelector->addItems({"GB", "GBC", "GBA", "NDS"}); m_systemSelector->setCurrentText(m_system);
     m_scopeSelector = new QComboBox(this); m_scopeSelector->addItems({"Global", "Per system"});
     m_scopeSelector->setCurrentIndex(m_mapping->scope() == MappingScope::Global ? 0 : 1);
@@ -49,7 +50,10 @@ void ControllerMapperWidget::setSystem(const QString& system)
 
 QRect ControllerMapperWidget::canvasRect() const
 {
-    return rect();
+    // Everything below the toolbar row. Using the full widget rect would slide the
+    // controller under the buttons and hide the capture prompt behind them.
+    const int top = m_header ? m_header->geometry().bottom() + 1 : 0;
+    return rect().adjusted(0, qMax(0, top), 0, 0);
 }
 QRectF ControllerMapperWidget::targetRect() const { const QRect canvas = canvasRect(); return m_artwork.targetRect(canvas.size()).translated(canvas.topLeft()); }
 QRectF ControllerMapperWidget::artworkRect() const { return targetRect(); }

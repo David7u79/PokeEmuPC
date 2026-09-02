@@ -94,6 +94,13 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_controller_mapper_widget PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
 
+add_executable(test_controller_artwork test_controller_artwork.cpp)
+target_link_libraries(test_controller_artwork PRIVATE Qt6::Core Qt6::Test Qt6::Gui Qt6::Svg pocket_input)
+add_test(NAME test_controller_artwork COMMAND test_controller_artwork)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_controller_artwork PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+endif()
+
 # Save Coordination & Stability Tests
 add_pocket_test(test_save_coordination test_save_coordination.cpp)
 

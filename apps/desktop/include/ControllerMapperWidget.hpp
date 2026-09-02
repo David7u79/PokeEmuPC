@@ -8,6 +8,7 @@
 #include <memory>
 
 class QComboBox;
+class QHBoxLayout;
 class QPushButton;
 
 namespace Pocket::App {
@@ -53,6 +54,7 @@ private:
     QString m_system{"GBA"};
     QString m_hoverId, m_selectedId, m_capturingId;
     QSet<QString> m_conflictIds;
+    QHBoxLayout* m_header{};
     QComboBox* m_systemSelector{};
     QComboBox* m_scopeSelector{};
     QPushButton* m_keyboardPreset{};
