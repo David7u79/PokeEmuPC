@@ -1,5 +1,6 @@
 #include <QtTest>
 #include <QFileInfo>
+#include <QSvgRenderer>
 #include "pocket/input/ControllerLayout.hpp"
 
 using namespace Pocket::Input;
@@ -38,7 +39,33 @@ void ControllerLayoutTest::normalizedResize()
 
 void ControllerLayoutTest::loadsAssets()
 {
-    const QMap<QString, QStringList> expected{{"GB", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","START","SELECT"}}, {"GBC", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","START","SELECT"}}, {"GBA", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","L","R","START","SELECT"}}, {"NDS", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","X","Y","L","R","START","SELECT","TOUCHSCREEN","MICROPHONE","LID"}}};
+    // Screens are where the picture goes; offering them as bindable buttons in the
+    // mapper would be nonsense, and the aspect must match the hardware because the
+    // emulated frame is scaled into the rect.
+    struct ScreenExpectation { const char* system; const char* id; double aspect; };
+    for (const auto& expectation : {ScreenExpectation{"GB", "SCREEN", 160.0 / 144.0},
+                                    ScreenExpectation{"GBC", "SCREEN", 160.0 / 144.0},
+                                    ScreenExpectation{"GBA", "SCREEN", 240.0 / 160.0},
+                                    ScreenExpectation{"NDS", "SCREEN_TOP", 256.0 / 192.0},
+                                    ScreenExpectation{"NDS", "TOUCHSCREEN", 256.0 / 192.0}}) {
+        const auto layout = Pocket::Input::ControllerLayout::forSystem(expectation.system);
+        QVERIFY2(layout.has_value(), expectation.system);
+        const auto* screen = layout->controlById(expectation.id);
+        QVERIFY2(screen != nullptr, expectation.id);
+        QVERIFY2(!screen->isBindable(), "a screen must never be offered as a button");
+
+        QSvgRenderer renderer(layout->artworkFile());
+        QVERIFY(renderer.isValid());
+        const QSizeF viewBox = renderer.viewBoxF().size();
+        const double aspect = (screen->width * viewBox.width()) / (screen->height * viewBox.height());
+        QVERIFY2(qAbs(aspect - expectation.aspect) / expectation.aspect < 0.02,
+                 qPrintable(QString("%1 %2 aspect %3, expected %4")
+                                .arg(expectation.system, expectation.id)
+                                .arg(aspect)
+                                .arg(expectation.aspect)));
+    }
+
+    const QMap<QString, QStringList> expected{{"GB", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","START","SELECT","SCREEN"}}, {"GBC", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","START","SELECT","SCREEN"}}, {"GBA", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","L","R","START","SELECT","SCREEN"}}, {"NDS", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","X","Y","L","R","START","SELECT","SCREEN_TOP","TOUCHSCREEN","MICROPHONE","LID"}}};
     for (auto it = expected.cbegin(); it != expected.cend(); ++it) { QString error; const auto layout = ControllerLayout::forSystem(it.key(), &error); QVERIFY2(layout.has_value(), qPrintable(error)); QCOMPARE(layout->system(), it.key()); QVERIFY(QFileInfo::exists(layout->artworkFile())); for (const QString& id : it.value()) QVERIFY2(layout->controlById(id), qPrintable(id)); }
 }
 

@@ -101,6 +101,7 @@ add_pocket_test(test_melonds_engine_real test_melonds_engine_real.cpp)
 add_pocket_test(test_gen4_emulation_save_integration test_gen4_emulation_save_integration.cpp)
 
 add_pocket_test(test_controller_layout test_controller_layout.cpp)
+target_link_libraries(test_controller_layout PRIVATE Qt6::Svg)
 add_pocket_test(test_controller_mapping test_controller_mapping.cpp)
 
 add_executable(test_controller_mapper_widget

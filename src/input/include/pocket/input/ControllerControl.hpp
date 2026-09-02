@@ -2,7 +2,7 @@
 #include <QString>
 namespace Pocket::Input {
 
-enum class ControlKind { Button, DPad, Touchscreen, Microphone, Lid };
+enum class ControlKind { Button, DPad, Touchscreen, Microphone, Lid, Screen };
 
 struct ControllerControl {
     QString id;                 // "A", "B", "X", "Y", "L", "R", "START", "SELECT",
