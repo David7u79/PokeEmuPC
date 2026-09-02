@@ -99,11 +99,6 @@ void ControllerHintOverlay::paintKeyLabels(QPainter& painter, const QSize& widge
 
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing, true);
-    QFont font = painter.font();
-    font.setPointSizeF(qMax(7.0, qMin(12.0, target.height() / 24.0)));
-    font.setBold(true);
-    painter.setFont(font);
-    const QFontMetrics metrics(font);
     constexpr int margin = 3;
     constexpr int padding = 3;
     std::vector<QRect> usedLabelRects;
@@ -113,11 +108,32 @@ void ControllerHintOverlay::paintKeyLabels(QPainter& painter, const QSize& widge
             continue;
 
         const auto binding = m_mapping->binding(m_artwork.system(), control.id);
-        const QString label = binding ? displayLabel(*binding) : QStringLiteral("—");
+        const QString label = binding ? displayLabel(*binding) : QString(QChar(0x2014));
         if (label.isEmpty())
             continue;
 
         const QRectF button = layoutControlRect(control, target);
+        QFont insideFont = painter.font();
+        insideFont.setBold(true);
+        insideFont.setPixelSize(qMax(7, qFloor(button.height() * 0.62)));
+        const QFontMetrics insideMetrics(insideFont);
+        const QRect insideRect = button.toAlignedRect();
+        const bool fitsInside = insideMetrics.horizontalAdvance(label) + padding * 2 <= insideRect.width()
+                                && insideMetrics.height() + padding * 2 <= insideRect.height();
+        if (fitsInside) {
+            painter.setFont(insideFont);
+            painter.setPen(QColor(0, 0, 0, 210));
+            painter.drawText(insideRect.translated(1, 1), Qt::AlignCenter, label);
+            painter.setPen(binding ? Qt::white : QColor(185, 185, 185));
+            painter.drawText(insideRect, Qt::AlignCenter, label);
+            continue;
+        }
+
+        QFont outsideFont = painter.font();
+        outsideFont.setBold(true);
+        outsideFont.setPointSizeF(qMax(7.0, qMin(12.0, target.height() / 24.0)));
+        painter.setFont(outsideFont);
+        const QFontMetrics metrics(outsideFont);
         const int roomRight = bounds.right() - qCeil(button.right());
         const int roomLeft = qFloor(button.left()) - bounds.left();
         const bool preferredRight = roomRight >= roomLeft;
