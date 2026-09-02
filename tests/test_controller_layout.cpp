@@ -38,7 +38,7 @@ void ControllerLayoutTest::normalizedResize()
 
 void ControllerLayoutTest::loadsAssets()
 {
-    const QMap<QString, QStringList> expected{{"GB", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","START","SELECT"}}, {"GBC", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","START","SELECT"}}, {"GBA", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","X","Y","L","R","START","SELECT"}}, {"NDS", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","X","Y","L","R","START","SELECT","TOUCHSCREEN","MICROPHONE","LID"}}};
+    const QMap<QString, QStringList> expected{{"GB", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","START","SELECT"}}, {"GBC", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","START","SELECT"}}, {"GBA", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","L","R","START","SELECT"}}, {"NDS", {"DPAD_UP","DPAD_DOWN","DPAD_LEFT","DPAD_RIGHT","A","B","X","Y","L","R","START","SELECT","TOUCHSCREEN","MICROPHONE","LID"}}};
     for (auto it = expected.cbegin(); it != expected.cend(); ++it) { QString error; const auto layout = ControllerLayout::forSystem(it.key(), &error); QVERIFY2(layout.has_value(), qPrintable(error)); QCOMPARE(layout->system(), it.key()); QVERIFY(QFileInfo::exists(layout->artworkFile())); for (const QString& id : it.value()) QVERIFY2(layout->controlById(id), qPrintable(id)); }
 }
 
