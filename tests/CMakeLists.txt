@@ -241,6 +241,21 @@ add_executable(test_cores_widget
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/CoresWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/CoresWidget.cpp
 )
+add_executable(test_library_grid
+    test_library_grid.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibraryWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibraryWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameArtworkLoader.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameArtworkLoader.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameCardDelegate.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameCardDelegate.cpp
+)
+target_include_directories(test_library_grid PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
+target_link_libraries(test_library_grid PRIVATE Qt6::Core Qt6::Gui Qt6::Test Qt6::Widgets Qt6::Network pocket_core pocket_storage)
+add_test(NAME test_library_grid COMMAND test_library_grid)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_library_grid PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins;QT_QPA_PLATFORM=offscreen")
+endif()
 target_include_directories(test_cores_widget PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
 target_link_libraries(test_cores_widget PRIVATE Qt6::Core Qt6::Test Qt6::Widgets pocket_core pocket_emulator_api)
 add_test(NAME test_cores_widget COMMAND test_cores_widget)
