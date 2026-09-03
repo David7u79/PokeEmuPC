@@ -153,6 +153,46 @@ private slots:
                                         : Pocket::App::EmulatorViewMode::ConsoleFrame);
     }
 
+    void dpadLabelsPreferVerticalSides()
+    {
+        Pocket::App::ControllerHintOverlay overlay;
+        overlay.setSystem(QStringLiteral("GBA"));
+        overlay.setMapping(std::make_shared<Pocket::Input::ControllerMapping>());
+        const QSize size(800, 600);
+        const QRectF up = overlay.controlRect(QStringLiteral("DPAD_UP"), size);
+        const QRectF down = overlay.controlRect(QStringLiteral("DPAD_DOWN"), size);
+        QVERIFY(overlay.labelRectFor(QStringLiteral("DPAD_UP"), size).center().y() < up.center().y());
+        QVERIFY(overlay.labelRectFor(QStringLiteral("DPAD_DOWN"), size).center().y() > down.center().y());
+    }
+
+    void gbaControlDisplayNames()
+    {
+        QCOMPARE(Pocket::App::controlDisplayName(QStringLiteral("DPAD_UP")), QStringLiteral("↑"));
+        QCOMPARE(Pocket::App::controlDisplayName(QStringLiteral("DPAD_DOWN")), QStringLiteral("↓"));
+        QCOMPARE(Pocket::App::controlDisplayName(QStringLiteral("DPAD_LEFT")), QStringLiteral("←"));
+        QCOMPARE(Pocket::App::controlDisplayName(QStringLiteral("DPAD_RIGHT")), QStringLiteral("→"));
+        for (const QString& id : {QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("L"),
+                                  QStringLiteral("R"), QStringLiteral("START"), QStringLiteral("SELECT")})
+            QCOMPARE(Pocket::App::controlDisplayName(id), id);
+    }
+
+    void pressedControlsHighlightOnlyTheirControl()
+    {
+        Pocket::App::ControllerHintOverlay overlay;
+        overlay.setSystem(QStringLiteral("GBA"));
+        const QSize size(800, 600);
+        const QRect rect = overlay.controlRect(QStringLiteral("A"), size).toAlignedRect();
+        QImage before(size, QImage::Format_ARGB32);
+        before.fill(Qt::transparent);
+        QImage after = before;
+        { QPainter painter(&after); overlay.setPressed(QStringLiteral("A"), true); overlay.paintPressed(painter, size); }
+        QVERIFY(overlay.isPressed(QStringLiteral("A")));
+        QVERIFY(after.pixelColor(rect.center()).alpha() > before.pixelColor(rect.center()).alpha());
+        QVERIFY(after.pixelColor(0, 0) == before.pixelColor(0, 0));
+        overlay.clearPressed();
+        QVERIFY(!overlay.isPressed(QStringLiteral("A")));
+    }
+
     void testFramesStayInsideScreenHoles()
     {
         const QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
