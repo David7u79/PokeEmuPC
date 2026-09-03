@@ -1,14 +1,126 @@
 #include "GameArtworkLoader.hpp"
+
 #include "pocket/storage/ArtworkCache.hpp"
-#include "pocket/storage/LibretroArtworkProvider.hpp"
 #include "pocket/storage/GameMetadataResolver.hpp"
+#include "pocket/storage/LibretroArtworkProvider.hpp"
+
+#include <QFile>
 #include <QFileInfo>
+#include <QImage>
+#include <QMetaObject>
+#include <QRegularExpression>
+
+namespace {
+
+QString platformForSystem(const QString& system)
+{
+    if (system == "GB") return "Nintendo - Game Boy";
+    if (system == "GBC") return "Nintendo - Game Boy Color";
+    if (system == "GBA") return "Nintendo - Game Boy Advance";
+    if (system == "NDS") return "Nintendo - Nintendo DS";
+    return {};
+}
+
+void appendCandidate(QStringList& candidates, const QString& candidate)
+{
+    const QString trimmed = candidate.trimmed();
+    if (!trimmed.isEmpty() && !candidates.contains(trimmed)) candidates.append(trimmed);
+}
+
+} // namespace
+
 namespace Pocket::App {
-GameArtworkLoader::GameArtworkLoader(QObject* parent) : GameArtworkLoader(std::make_shared<Storage::ArtworkCache>(), parent) {}
-GameArtworkLoader::GameArtworkLoader(std::shared_ptr<Storage::ArtworkCache> cache, QObject* parent) : QObject(parent), m_cache(std::move(cache)) { m_provider = new Storage::LibretroArtworkProvider(m_cache, this); }
-void GameArtworkLoader::requestArtwork(const QString& gameId, const QString&, const QString& system, const QString& romPath) {
- if (gameId.isEmpty() || m_pending.contains(gameId)) return; const auto cached=m_cache->getCachedPath(gameId.toStdString(), Storage::ArtworkType::BoxArt); if (!cached.empty()) { emit artworkReady(gameId, QString::fromStdString(cached)); return; } if (m_cache->isNegativeCached(gameId.toStdString(), Storage::ArtworkType::BoxArt)) return;
- const QString platform=system=="GB"?"Nintendo - Game Boy":system=="GBC"?"Nintendo - Game Boy Color":system=="GBA"?"Nintendo - Game Boy Advance":system=="NDS"?"Nintendo - Nintendo DS":QString(); if(platform.isEmpty()) return; m_pending.insert(gameId); const std::string canonical=Storage::GameMetadataResolver::normalizeFilename(QFileInfo(romPath).completeBaseName().toStdString());
- m_provider->fetchArtworkAsync(platform.toStdString(), canonical, Storage::ArtworkType::BoxArt, [this, gameId](const Storage::ArtworkResult& result) { QMetaObject::invokeMethod(this, [this, gameId, result] { m_pending.remove(gameId); if(result.success) emit artworkReady(gameId, QString::fromStdString(result.cachedFilePath)); }, Qt::QueuedConnection); });
+
+GameArtworkLoader::GameArtworkLoader(QObject* parent)
+    : GameArtworkLoader(std::make_shared<Storage::ArtworkCache>(), parent)
+{
 }
+
+GameArtworkLoader::GameArtworkLoader(std::shared_ptr<Storage::ArtworkCache> cache, QObject* parent)
+    : QObject(parent)
+    , m_cache(std::move(cache))
+    , m_provider(new Storage::LibretroArtworkProvider(m_cache, this))
+{
 }
+
+QStringList GameArtworkLoader::titleCandidates(const QString& fileBaseName)
+{
+    const QString rawTitle = QFileInfo(fileBaseName).completeBaseName();
+    const QString normalized = QString::fromStdString(Storage::GameMetadataResolver::normalizeFilename(rawTitle.toStdString()));
+    const QString withoutTags = QString(rawTitle)
+                                    .remove(QRegularExpression("\\s*\\([^)]*\\)"))
+                                    .remove(QRegularExpression("\\s*\\[[^]]*\\]"))
+                                    .replace(QRegularExpression("\\s{2,}"), " ")
+                                    .trimmed();
+    QStringList candidates;
+    appendCandidate(candidates, normalized);
+    appendCandidate(candidates, rawTitle);
+    appendCandidate(candidates, withoutTags);
+    for (const QString& region : {" (USA)", " (USA, Europe)", " (Europe)", " (Japan)"}) {
+        appendCandidate(candidates, withoutTags + region);
+    }
+    const QRegularExpression article("^(The|An|A)\\s+(.+)$", QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch match = article.match(withoutTags);
+    if (match.hasMatch()) appendCandidate(candidates, QString("%1, %2").arg(match.captured(2), match.captured(1)));
+    return candidates;
+}
+
+void GameArtworkLoader::requestArtwork(const QString& gameId, const QString&, const QString& system, const QString& romPath)
+{
+    requestArtworkInternal(gameId, system, romPath, false);
+}
+
+void GameArtworkLoader::retryArtwork(const QString& gameId, const QString&, const QString& system, const QString& romPath)
+{
+    requestArtworkInternal(gameId, system, romPath, true);
+}
+
+void GameArtworkLoader::requestArtworkInternal(const QString& gameId, const QString& system, const QString& romPath, bool ignoreNegativeCache)
+{
+    if (gameId.isEmpty() || m_pending.contains(gameId)) return;
+    const auto cached = m_cache->getCachedPath(gameId.toStdString(), Storage::ArtworkType::BoxArt);
+    if (!cached.empty()) {
+        emit artworkReady(gameId, QString::fromStdString(cached));
+        return;
+    }
+    if (!ignoreNegativeCache && m_cache->isNegativeCached(gameId.toStdString(), Storage::ArtworkType::BoxArt)) return;
+    const QString platform = platformForSystem(system);
+    if (platform.isEmpty()) return;
+    m_pending.insert(gameId);
+    fetchCandidate(gameId, platform, titleCandidates(QFileInfo(romPath).fileName()), 0);
+}
+
+void GameArtworkLoader::fetchCandidate(const QString& gameId, const QString& platform, const QStringList& candidates, int candidateIndex)
+{
+    if (candidateIndex >= candidates.size()) {
+        m_pending.remove(gameId);
+        return;
+    }
+    m_provider->fetchArtworkAsync(platform.toStdString(), candidates.at(candidateIndex).toStdString(), Storage::ArtworkType::BoxArt,
+        [this, gameId, platform, candidates, candidateIndex](const Storage::ArtworkResult& result) {
+            QMetaObject::invokeMethod(this, [this, gameId, platform, candidates, candidateIndex, result] {
+                if (result.success) {
+                    m_pending.remove(gameId);
+                    emit artworkReady(gameId, QString::fromStdString(result.cachedFilePath));
+                    return;
+                }
+                fetchCandidate(gameId, platform, candidates, candidateIndex + 1);
+            }, Qt::QueuedConnection);
+        });
+}
+
+void GameArtworkLoader::setArtworkFromFile(const QString& gameId, const QString& imagePath)
+{
+    if (gameId.isEmpty()) return;
+    QImage image(imagePath);
+    QFile file(imagePath);
+    if (image.isNull() || !file.open(QIODevice::ReadOnly)) return;
+    const QByteArray bytes = file.readAll();
+    if (bytes.isEmpty()) return;
+    if (!m_cache->saveArtwork(gameId.toStdString(), Storage::ArtworkType::BoxArt,
+            reinterpret_cast<const uint8_t*>(bytes.constData()), static_cast<size_t>(bytes.size()))) return;
+    const auto cached = m_cache->getCachedPath(gameId.toStdString(), Storage::ArtworkType::BoxArt);
+    if (!cached.empty()) emit artworkReady(gameId, QString::fromStdString(cached));
+}
+
+} // namespace Pocket::App
