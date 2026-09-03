@@ -43,7 +43,9 @@ void GameCardDelegate::setCardWidth(int width)
 
 QSize GameCardDelegate::sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const
 {
-    return {m_cardWidth, m_cardWidth * 4 / 3 + 34};
+    // Square cover area: these boxes are wider than they are tall, and a 3:4 card
+    // could only fit them by cropping the sides off.
+    return {m_cardWidth, m_cardWidth + 34};
 }
 
 void GameCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
@@ -70,13 +72,17 @@ void GameCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     const QString artworkPath = index.data(ArtworkRole).toString();
     QPixmap pixmap(artworkPath);
     if (!artworkPath.isEmpty() && !pixmap.isNull()) {
-        QPainterPath clip;
-        clip.addRoundedRect(cover, 10, 10);
-        painter->save();
-        painter->setClipPath(clip);
-        const QSize scaledSize = pixmap.size().scaled(cover.size(), Qt::KeepAspectRatioByExpanding);
+        // Whole cover, never cropped: the box is part of what the player recognises.
+        // Any space it leaves is filled by the console's own colour.
+        QLinearGradient backdrop(cover.topLeft(), cover.bottomRight());
+        const QColor color = systemColor(system);
+        backdrop.setColorAt(0, color.darker(115));
+        backdrop.setColorAt(1, color.darker(150));
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(backdrop);
+        painter->drawRoundedRect(cover, 10, 10);
+        const QSize scaledSize = pixmap.size().scaled(cover.size() - QSize(8, 8), Qt::KeepAspectRatio);
         painter->drawPixmap(QRect(cover.center() - QPoint(scaledSize.width() / 2, scaledSize.height() / 2), scaledSize), pixmap);
-        painter->restore();
     } else {
         QLinearGradient gradient(cover.topLeft(), cover.bottomRight());
         const QColor color = systemColor(system);

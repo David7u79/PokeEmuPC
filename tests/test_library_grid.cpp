@@ -131,8 +131,8 @@ private slots:
         zoom->setValue(240);
         const QSize after=grid->itemDelegate()->sizeHint(QStyleOptionViewItem(),grid->model()->index(0,0));
         QVERIFY(after.width()>before.width());
-        QCOMPARE(before.height(), before.width()*4/3+34);
-        QCOMPARE(after.height(), after.width()*4/3+34);
+        QCOMPARE(before.height(), before.width()+34);
+        QCOMPARE(after.height(), after.width()+34);
     }
     void personalOrderEnablesDragAndIsRestored() {
         QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo);
