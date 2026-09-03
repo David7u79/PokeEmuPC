@@ -14,6 +14,7 @@
 #include "LibraryWidget.hpp"
 #include "GameArtworkLoader.hpp"
 #include "ArtworkIndex.hpp"
+#include "ArtworkPickerDialog.hpp"
 #include "pocketpartner/storage/DatabaseManager.hpp"
 #include "pocket/storage/SchemaMigration.hpp"
 #include "pocket/storage/ArtworkCache.hpp"
@@ -75,6 +76,10 @@ private slots:
         QCOMPARE(Pocket::App::ArtworkIndex::bestMatch("Pokemon Negro 2", names), QString("Pokemon - Edicion Negra 2 (Spain) (NDSi Enhanced)"));
         QCOMPARE(Pocket::App::ArtworkIndex::bestMatch("Pokemon Platino", names), QString("Pokemon - Edicion Platino (Spain)"));
         QVERIFY(Pocket::App::ArtworkIndex::bestMatch("Metroid Fusion", names).isEmpty());
+        QCOMPARE(Pocket::App::ArtworkIndex::rankedMatches("Pokemon Esmeralda", names).first(), QString("Pokemon - Edicion Esmeralda (Spain)"));
+        const QStringList alphabetical = Pocket::App::ArtworkIndex::rankedMatches({}, names, 3);
+        QCOMPARE(alphabetical.size(), 3);
+        QCOMPARE(alphabetical, QStringList({"Mario Kart - Super Circuit (USA)", "Pokemon - Edicion Esmeralda (Spain)", "Pokemon - Edicion Negra 2 (Spain) (NDSi Enhanced)"}));
 
         QTemporaryDir directory;
         QVERIFY(directory.isValid());
@@ -85,6 +90,30 @@ private slots:
         cachedIndex.ensureLoaded(repo);
         QVERIFY(cachedIndex.isLoaded(repo));
         QCOMPARE(cachedIndex.names(repo), names);
+    }
+    void artworkPickerRanksLoadedIndex() {
+        const QStringList names{
+            "Pokemon - Edicion Esmeralda (Spain)",
+            "Pokemon - Emerald Version (USA, Europe)",
+            "Pokemon - Edicion Negra 2 (Spain) (NDSi Enhanced)",
+            "Pokemon - Edicion Platino (Spain)",
+            "Mario Kart - Super Circuit (USA)"
+        };
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        auto cache = std::make_shared<Pocket::Storage::ArtworkCache>(directory.path().toStdString());
+        Pocket::App::GameArtworkLoader loader(cache);
+        loader.index()->setNames("Nintendo_-_Game_Boy_Advance", names);
+        Pocket::App::ArtworkPickerDialog dialog("Pokemon Esmeralda", "GBA", &loader);
+        dialog.show();
+        auto* candidates = dialog.findChild<QListWidget*>("artworkCandidates");
+        auto* search = dialog.findChild<QLineEdit*>("artworkSearch");
+        QVERIFY(candidates);
+        QVERIFY(search);
+        QTRY_VERIFY(candidates->count() > 0);
+        QCOMPARE(candidates->item(0)->text(), QString("Pokemon - Edicion Esmeralda (Spain)"));
+        search->setText("Platino");
+        QTRY_COMPARE(candidates->item(0)->text(), QString("Pokemon - Edicion Platino (Spain)"));
     }
     void zoomChangesDelegateSizeHint() {
         QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo); Pocket::App::LibraryWidget widget(repo);

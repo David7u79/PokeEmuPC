@@ -28,6 +28,8 @@ public:
     void requestArtwork(const QString& gameId, const QString& title, const QString& system, const QString& romPath);
     void retryArtwork(const QString& gameId, const QString& title, const QString& system, const QString& romPath);
     void setArtworkFromFile(const QString& gameId, const QString& imagePath);
+    void useIndexName(const QString& gameId, const QString& system, const QString& indexName);
+    ArtworkIndex* index() const;
 
 signals:
     void artworkReady(const QString& gameId, const QString& path);

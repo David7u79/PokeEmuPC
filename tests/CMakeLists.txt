@@ -249,6 +249,8 @@ add_executable(test_library_grid
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameArtworkLoader.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/ArtworkIndex.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/ArtworkIndex.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/ArtworkPickerDialog.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/ArtworkPickerDialog.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameCardDelegate.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameCardDelegate.cpp
 )

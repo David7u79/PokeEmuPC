@@ -173,4 +173,38 @@ void GameArtworkLoader::setArtworkFromFile(const QString& gameId, const QString&
     if (!cached.empty()) emit artworkReady(gameId, QString::fromStdString(cached));
 }
 
+void GameArtworkLoader::useIndexName(const QString& gameId, const QString& system, const QString& indexName)
+{
+    const QString platform = platformForSystem(system);
+    if (gameId.isEmpty() || indexName.isEmpty() || platform.isEmpty()) {
+        return;
+    }
+    m_provider->fetchArtworkAsync(platform.toStdString(), indexName.toStdString(), Storage::ArtworkType::BoxArt,
+        [this, gameId](const Storage::ArtworkResult& result) {
+            QMetaObject::invokeMethod(this, [this, gameId, result] {
+                if (!result.success) {
+                    return;
+                }
+                QFile file(QString::fromStdString(result.cachedFilePath));
+                if (!file.open(QIODevice::ReadOnly)) {
+                    return;
+                }
+                const QByteArray bytes = file.readAll();
+                if (bytes.isEmpty() || !m_cache->saveArtwork(gameId.toStdString(), Storage::ArtworkType::BoxArt,
+                        reinterpret_cast<const uint8_t*>(bytes.constData()), static_cast<size_t>(bytes.size()))) {
+                    return;
+                }
+                const auto cached = m_cache->getCachedPath(gameId.toStdString(), Storage::ArtworkType::BoxArt);
+                if (!cached.empty()) {
+                    emit artworkReady(gameId, QString::fromStdString(cached));
+                }
+            }, Qt::QueuedConnection);
+        });
+}
+
+ArtworkIndex* GameArtworkLoader::index() const
+{
+    return m_index;
+}
+
 } // namespace Pocket::App
