@@ -269,10 +269,14 @@ void ControllerHintOverlay::paintKeyLabels(QPainter& painter, const QSize& widge
 
         painter.setFont(badgeFontFor(control.id, widgetSize));
         if (inside) {
-            painter.setPen(QColor(0, 0, 0, 200));
+            // Translucent over the button: the console's own letter has to stay
+            // readable underneath, that is what says which button the key drives.
+            painter.setPen(QColor(0, 0, 0, 110));
             painter.drawText(labelRect.translated(1, 1), Qt::AlignCenter, text);
+            painter.setPen(QColor(255, 255, 255, 165));
+        } else {
+            painter.setPen(Qt::white);
         }
-        painter.setPen(Qt::white);
         painter.drawText(labelRect, Qt::AlignCenter, text);
     }
     painter.restore();
