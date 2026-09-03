@@ -20,6 +20,7 @@ class GameArtworkLoader;
 class GameCardDelegate;
 class LibrarySidebar;
 class EmptyStateWidget;
+class GameInspector;
 
 class LibraryWidget : public QWidget {
     Q_OBJECT
@@ -58,15 +59,8 @@ private:
     LibrarySidebar* m_categories{nullptr};
     EmptyStateWidget* m_emptyState{nullptr};
     QLabel* m_statusLabel{nullptr};
-    QLabel* m_detailCover{nullptr};
-    QLabel* m_detailTitle{nullptr};
-    QLabel* m_detailInfo{nullptr};
-    QLabel* m_detailPath{nullptr};
     QPushButton* m_addButton{nullptr};
-    QPushButton* m_playButton{nullptr};
-    QPushButton* m_searchArtworkButton{nullptr};
-    QPushButton* m_chooseArtworkButton{nullptr};
-    QPushButton* m_removeButton{nullptr};
+    GameInspector* m_inspector{nullptr};
     QLineEdit* m_search{nullptr};
     QComboBox* m_sortOrder{nullptr};
     QSlider* m_cardZoom{nullptr};

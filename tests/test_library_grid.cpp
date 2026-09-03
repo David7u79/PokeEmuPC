@@ -4,11 +4,13 @@
 #include <QLineEdit>
 #include <QListView>
 #include <QListWidget>
+#include <QPushButton>
 #include <QSlider>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QBuffer>
 #include <QDropEvent>
@@ -57,6 +59,57 @@ private slots:
         QTest::keyClick(grid, Qt::Key_Return);
         QTRY_COMPARE(spy.count(),1);
         QCOMPARE(qvariant_cast<Pocket::Core::Game>(spy.at(0).at(0)).title, std::string("Alpha"));
+    }
+    void inspectorShowsSelectionSaveStateAndPlay() {
+        QTemporaryFile database;
+        QTemporaryDir roms;
+        auto repo=makeRepository(database,roms);
+        QVERIFY(repo);
+        Pocket::App::LibraryWidget widget(repo);
+        widget.resize(900,600);
+        widget.show();
+        auto *grid=widget.findChild<QListView*>("gameGrid");
+        auto *title=widget.findChild<QLabel*>("detailTitle");
+        auto *play=widget.findChild<QPushButton*>("playButton");
+        QVERIFY(grid);
+        QVERIFY(title);
+        QVERIFY(play);
+        const QModelIndex index=grid->model()->index(0,0);
+        grid->setCurrentIndex(index);
+        QTRY_COMPARE(title->text(),index.data().toString());
+        QTRY_VERIFY(play->isVisible());
+        QStringList labelTexts;
+        for (QLabel* label : widget.findChildren<QLabel*>()) {
+            labelTexts.append(label->text());
+        }
+        QVERIFY(labelTexts.contains("No detectada"));
+        QString romPath;
+        for (const auto& game : repo->getAllGames()) {
+            if (QString::fromStdString(game.title)==index.data().toString()) {
+                romPath=QString::fromStdString(game.romPath);
+                break;
+            }
+        }
+        QVERIFY(!romPath.isEmpty());
+        const QFileInfo romInfo(romPath);
+        QFile save(romInfo.absolutePath()+"/"+romInfo.completeBaseName()+".sav");
+        QVERIFY(save.open(QIODevice::WriteOnly));
+        save.close();
+        grid->setCurrentIndex({});
+        grid->setCurrentIndex(index);
+        QTRY_VERIFY(widget.findChildren<QLabel*>().contains(title));
+        labelTexts.clear();
+        for (QLabel* label : widget.findChildren<QLabel*>()) {
+            labelTexts.append(label->text());
+        }
+        QVERIFY(labelTexts.contains("Detectada"));
+        QSignalSpy spy(&widget,&Pocket::App::LibraryWidget::gameSelected);
+        play->click();
+        QTRY_COMPARE(spy.count(),1);
+        QCOMPARE(qvariant_cast<Pocket::Core::Game>(spy.at(0).at(0)).title,index.data().toString().toStdString());
+        grid->setCurrentIndex({});
+        QTRY_VERIFY(!play->isVisible());
+        QVERIFY(widget.findChildren<QLabel*>().contains(title));
     }
     void cachedArtworkEmitsWithoutNetwork() {
         QTemporaryDir directory; QVERIFY(directory.isValid()); auto cache=std::make_shared<Pocket::Storage::ArtworkCache>(directory.path().toStdString()); QImage image(4,4,QImage::Format_ARGB32); image.fill(Qt::red); QByteArray bytes; QBuffer buffer(&bytes); buffer.open(QIODevice::WriteOnly); image.save(&buffer,"PNG"); QVERIFY(cache->saveArtwork("cached",Pocket::Storage::ArtworkType::BoxArt,reinterpret_cast<const uint8_t*>(bytes.constData()),size_t(bytes.size())));

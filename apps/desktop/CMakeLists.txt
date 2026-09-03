@@ -3,6 +3,7 @@ add_executable(PocketPartner
     include/Theme.hpp
     include/AppNavigation.hpp
     include/LibraryWidget.hpp
+    include/GameInspector.hpp
     include/GameArtworkLoader.hpp
     include/ArtworkIndex.hpp
     include/ArtworkPickerDialog.hpp
@@ -27,6 +28,7 @@ add_executable(PocketPartner
     src/Theme.cpp
     src/AppNavigation.cpp
     src/LibraryWidget.cpp
+    src/GameInspector.cpp
     src/GameArtworkLoader.cpp
     src/ArtworkIndex.cpp
     src/ArtworkPickerDialog.cpp

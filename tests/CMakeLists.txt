@@ -247,6 +247,8 @@ add_executable(test_library_grid
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/Theme.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibraryWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibraryWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameInspector.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameInspector.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameArtworkLoader.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameArtworkLoader.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/ArtworkIndex.hpp
@@ -316,6 +318,8 @@ add_executable(test_app_navigation
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/MainWindow.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibraryWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibraryWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameInspector.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameInspector.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameArtworkLoader.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameArtworkLoader.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/ArtworkIndex.hpp
