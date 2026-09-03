@@ -5,6 +5,16 @@
 
 namespace Pocket::App {
 
+void applyVolume(int16_t* samples, size_t count, float volume) {
+    if (!samples || volume == 1.0f)
+        return;
+    volume = std::clamp(volume, 0.0f, 1.0f);
+    for (size_t i = 0; i < count; ++i) {
+        const int value = static_cast<int>(samples[i] * volume);
+        samples[i] = static_cast<int16_t>(std::clamp(value, -32768, 32767));
+    }
+}
+
 AudioSink::AudioSink() = default;
 
 AudioSink::~AudioSink() {
@@ -80,10 +90,26 @@ void AudioSink::submit(const int16_t* interleavedStereo, size_t frames) {
     if (!m_isOpen || !m_ringBuffer)
         return;
 
-    m_ringBuffer->push(interleavedStereo, frames);
+    if (m_volume == 1.0f) {
+        m_ringBuffer->push(interleavedStereo, frames);
+    } else {
+        std::vector<int16_t> scaled(interleavedStereo, interleavedStereo + frames * 2);
+        applyVolume(scaled.data(), scaled.size(), m_volume);
+        m_ringBuffer->push(scaled.data(), frames);
+    }
 #ifdef _WIN32
     writeQueuedSamples();
 #endif
+}
+
+void AudioSink::setVolume(float volume) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_volume = std::clamp(volume, 0.0f, 1.0f);
+}
+
+float AudioSink::volume() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_volume;
 }
 
 Pocket::Emulator::AudioRingBuffer::Stats AudioSink::stats() const {

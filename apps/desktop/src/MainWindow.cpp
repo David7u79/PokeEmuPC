@@ -3,6 +3,14 @@
 #include <QPixmap>
 #include <QPainter>
 #include <QSettings>
+#include <QFile>
+#include <QHBoxLayout>
+#include <QMenu>
+#include <QSlider>
+#include <QToolButton>
+#include <QVBoxLayout>
+#include <algorithm>
+#include "SaveStateSlots.hpp"
 
 namespace Pocket::App {
 
@@ -25,26 +33,98 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
     }
 
     m_libraryWidget = new LibraryWidget(gameRepo, m_tabWidget);
-    m_emulatorStack = new QStackedWidget(m_tabWidget);
+    m_emulatorPage = new QWidget(m_tabWidget);
+    auto* emulatorLayout = new QVBoxLayout(m_emulatorPage);
+    auto* controlsLayout = new QHBoxLayout;
+    m_emulatorStack = new QStackedWidget(m_emulatorPage);
     m_emulatorWidget = new EmulatorWidget(m_emulatorStack);
     m_emulatorWidget->setControllerMapping(m_controllerMapping);
     m_ndsDisplayWidget = new NdsDisplayWidget(m_emulatorStack);
     m_ndsDisplayWidget->setControllerMapping(m_controllerMapping);
     m_emulatorStack->addWidget(m_emulatorWidget);
     m_emulatorStack->addWidget(m_ndsDisplayWidget);
+    m_speedButton = new QToolButton(m_emulatorPage);
+    m_speedButton->setText("x1");
+    m_speedButton->setPopupMode(QToolButton::InstantPopup);
+    auto* speedMenu = new QMenu(m_speedButton);
+    for (int speed = 1; speed <= 5; ++speed) {
+        const QString label = speed == 1 ? QStringLiteral("Normal (x1)") : QStringLiteral("x%1").arg(speed);
+        auto* action = speedMenu->addAction(label);
+        connect(action, &QAction::triggered, this, [this, speed] {
+            if (auto* engine = activeEngine()) {
+                engine->setSpeedMultiplier(speed);
+                m_speedButton->setText(QStringLiteral("x%1").arg(speed));
+            }
+        });
+    }
+    m_speedButton->setMenu(speedMenu);
+    m_saveStateButton = new QToolButton(m_emulatorPage);
+    m_saveStateButton->setText("Save state");
+    m_saveStateButton->setPopupMode(QToolButton::InstantPopup);
+    auto* statesMenu = new QMenu(m_saveStateButton);
+    for (int slot = 1; slot <= kSaveStateSlotCount; ++slot) {
+        auto* action = statesMenu->addAction(QStringLiteral("Guardar en slot %1").arg(slot));
+        connect(action, &QAction::triggered, this, [this, slot] { saveActiveState(slot); });
+    }
+    statesMenu->addSeparator();
+    for (int slot = 1; slot <= kSaveStateSlotCount; ++slot) {
+        auto* action = statesMenu->addAction(QStringLiteral("Cargar slot %1").arg(slot));
+        connect(action, &QAction::triggered, this, [this, slot] { loadActiveState(slot); });
+    }
+    statesMenu->addSeparator();
+    auto* autoLoad = statesMenu->addAction("Cargar autoguardado");
+    connect(autoLoad, &QAction::triggered, this, [this] { loadActiveState(0); });
+    m_saveStateButton->setMenu(statesMenu);
+    m_volumeSlider = new QSlider(Qt::Horizontal, m_emulatorPage);
+    m_volumeSlider->setRange(0, 100);
+    m_volumeSlider->setFixedWidth(120);
+    QSettings volumeSettings("PocketPartnerProject", "PocketPartner");
+    m_volumeSlider->setValue(std::clamp(volumeSettings.value("emulator/volume", 100).toInt(), 0, 100));
+    m_lastVolume = m_volumeSlider->value() > 0 ? m_volumeSlider->value() : 100;
+    m_muteButton = new QToolButton(m_emulatorPage);
+    m_muteButton->setText("Mute");
+    connect(m_volumeSlider, &QSlider::valueChanged, this, [this](int value) {
+        if (value > 0)
+            m_lastVolume = value;
+        QSettings("PocketPartnerProject", "PocketPartner").setValue("emulator/volume", value);
+        const float volume = value / 100.0f;
+        m_emulatorWidget->audioSink().setVolume(volume);
+        m_ndsAudioSink.setVolume(volume);
+    });
+    connect(m_muteButton, &QToolButton::clicked, this, [this] {
+        m_volumeSlider->setValue(m_volumeSlider->value() == 0 ? m_lastVolume : 0);
+    });
+    controlsLayout->addWidget(m_speedButton);
+    controlsLayout->addWidget(m_saveStateButton);
+    controlsLayout->addStretch();
+    controlsLayout->addWidget(m_volumeSlider);
+    controlsLayout->addWidget(m_muteButton);
+    emulatorLayout->addLayout(controlsLayout);
+    emulatorLayout->addWidget(m_emulatorStack);
     m_companionWidget = new CompanionWidget(m_tabWidget);
     m_settingsWidget = new SettingsWidget(dbManager, m_controllerMapping, m_tabWidget);
     m_diagnosticsWidget = new DiagnosticsWidget(m_tabWidget);
 
     m_tabWidget->addTab(m_libraryWidget, "Library");
-    m_tabWidget->addTab(m_emulatorStack, "Emulator");
+    m_tabWidget->addTab(m_emulatorPage, "Emulator");
     m_tabWidget->addTab(m_companionWidget, "Companion");
     m_tabWidget->addTab(m_settingsWidget, "Settings");
     m_tabWidget->addTab(m_diagnosticsWidget, "Diagnostics");
 
     setCentralWidget(m_tabWidget);
+    m_emulatorWidget->audioSink().setVolume(m_volumeSlider->value() / 100.0f);
+    m_ndsAudioSink.setVolume(m_volumeSlider->value() / 100.0f);
+    m_autoSaveTimer.setInterval(60000);
+    connect(&m_autoSaveTimer, &QTimer::timeout, this, [this] {
+        if (auto* engine = activeEngine(); engine && engine->isRunning())
+            saveActiveState(0);
+        else
+            m_autoSaveTimer.stop();
+    });
 
     connect(m_libraryWidget, &LibraryWidget::gameSelected, this, [this](const Core::Game& game) {
+        saveActiveState(0);
+        m_autoSaveTimer.stop();
         if (game.system == Core::GameSystem::GB || game.system == Core::GameSystem::GBC ||
             game.system == Core::GameSystem::GBA) {
             stopNdsEngine();
@@ -53,7 +133,9 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             m_emulatorWidget->setControllerSystem(QString::fromStdString(Core::GameSystemUtils::toString(game.system)));
             m_emulatorWidget->loadAndStartRom(QString::fromStdString(game.romPath));
             m_emulatorStack->setCurrentWidget(m_emulatorWidget);
-            m_tabWidget->setCurrentWidget(m_emulatorStack);
+            m_tabWidget->setCurrentWidget(m_emulatorPage);
+            if (m_emulatorWidget->engine() && m_emulatorWidget->engine()->isRunning())
+                m_autoSaveTimer.start();
         } else if (game.system == Core::GameSystem::NDS) {
             m_emulatorWidget->stopEmulator();
             stopNdsEngine();
@@ -64,14 +146,16 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
                 m_emulatorWidget->setStatusMessage(QString::fromStdString(m_ndsEngine->coreError()));
                 m_ndsEngine.reset();
                 m_emulatorStack->setCurrentWidget(m_emulatorWidget);
-                m_tabWidget->setCurrentWidget(m_emulatorStack);
+                m_tabWidget->setCurrentWidget(m_emulatorPage);
+                updateEmulatorControls();
                 return;
             }
             if (!m_ndsEngine->loadRom(game.romPath)) {
                 m_emulatorWidget->setStatusMessage("Failed to load Nintendo DS ROM");
                 m_ndsEngine.reset();
                 m_emulatorStack->setCurrentWidget(m_emulatorWidget);
-                m_tabWidget->setCurrentWidget(m_emulatorStack);
+                m_tabWidget->setCurrentWidget(m_emulatorPage);
+                updateEmulatorControls();
                 return;
             }
             // Only after loadRom: the core exposes no save RAM until a game is loaded.
@@ -89,10 +173,12 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             m_ndsEngine->start();
             m_emulatorStack->setCurrentWidget(m_ndsDisplayWidget);
             m_ndsDisplayWidget->setFocus();
-            m_tabWidget->setCurrentWidget(m_emulatorStack);
+            m_tabWidget->setCurrentWidget(m_emulatorPage);
+            m_autoSaveTimer.start();
         } else {
             m_emulatorWidget->setStatusMessage("system not supported by the internal core");
         }
+        updateEmulatorControls();
     });
 
     // Rebinding a control in Settings takes effect without restarting the game.
@@ -113,8 +199,52 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             });
 }
 
+Pocket::Emulator::LibretroEngineBase* MainWindow::activeEngine() const {
+    if (m_emulatorStack->currentWidget() == m_ndsDisplayWidget)
+        return m_ndsEngine.get();
+    return m_emulatorWidget->engine();
+}
+
+QString MainWindow::activeSavePath() const {
+    if (m_emulatorStack->currentWidget() == m_ndsDisplayWidget && m_ndsEngine)
+        return QString::fromStdString(m_ndsEngine->saveFilePath());
+    return m_emulatorWidget->savePath();
+}
+
+void MainWindow::saveActiveState(int slot) {
+    auto* engine = activeEngine();
+    const QString path = saveStatePath(activeSavePath(), slot);
+    if (!engine || path.isEmpty())
+        return;
+    const std::vector<uint8_t> state = engine->saveState();
+    if (state.empty())
+        return;
+    QFile file(path);
+    if (file.open(QIODevice::WriteOnly))
+        file.write(reinterpret_cast<const char*>(state.data()), static_cast<qint64>(state.size()));
+}
+
+void MainWindow::loadActiveState(int slot) {
+    auto* engine = activeEngine();
+    QFile file(saveStatePath(activeSavePath(), slot));
+    if (!engine || !file.open(QIODevice::ReadOnly))
+        return;
+    const QByteArray bytes = file.readAll();
+    if (!bytes.isEmpty())
+        engine->loadState(std::vector<uint8_t>(bytes.begin(), bytes.end()));
+}
+
+void MainWindow::updateEmulatorControls() {
+    auto* engine = activeEngine();
+    m_speedButton->setEnabled(engine != nullptr);
+    m_saveStateButton->setEnabled(engine && engine->supportsSaveStates());
+    m_speedButton->setText(QStringLiteral("x%1").arg(engine ? engine->speedMultiplier() : 1));
+}
+
 void MainWindow::stopNdsEngine() {
     if (m_ndsEngine) {
+        if (m_emulatorStack->currentWidget() == m_ndsDisplayWidget)
+            saveActiveState(0);
         // Read the path before stop(), which clears it, and flush before the core
         // is destroyed: otherwise the whole play session is lost on exit.
         const std::string savePath = m_ndsEngine->saveFilePath();
@@ -132,6 +262,8 @@ void MainWindow::stopNdsEngine() {
 
 void MainWindow::closeEvent(QCloseEvent* event) {
     // Closing the window with a game running must still persist it.
+    saveActiveState(0);
+    m_autoSaveTimer.stop();
     m_emulatorWidget->stopEmulator();
     stopNdsEngine();
     QMainWindow::closeEvent(event);

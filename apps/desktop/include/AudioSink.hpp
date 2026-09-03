@@ -15,6 +15,8 @@
 
 namespace Pocket::App {
 
+void applyVolume(int16_t* samples, size_t count, float volume);
+
 class AudioSink {
 public:
     AudioSink();
@@ -30,6 +32,8 @@ public:
 
     Pocket::Emulator::AudioRingBuffer::Stats stats() const;
     size_t queuedFrames() const;
+    void setVolume(float volume);
+    float volume() const;
 
 private:
 #ifdef _WIN32
@@ -44,6 +48,7 @@ private:
     mutable std::mutex m_mutex;
     std::unique_ptr<Pocket::Emulator::AudioRingBuffer> m_ringBuffer;
     bool m_isOpen{false};
+    float m_volume{1.0f};
 };
 
 } // namespace Pocket::App

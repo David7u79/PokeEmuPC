@@ -264,4 +264,19 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_audio_sink PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
 endif()
 
+add_executable(test_emulator_controls
+    test_emulator_controls.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/AudioSink.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/AudioSink.cpp
+)
+target_include_directories(test_emulator_controls PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
+target_link_libraries(test_emulator_controls PRIVATE Qt6::Core Qt6::Test pocket_emulator_api)
+if(WIN32)
+    target_link_libraries(test_emulator_controls PRIVATE winmm)
+endif()
+add_test(NAME test_emulator_controls COMMAND test_emulator_controls)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_emulator_controls PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins")
+endif()
+
 add_pocket_test(test_rom_fingerprint_streaming test_rom_fingerprint_streaming.cpp)
