@@ -1,10 +1,12 @@
 #include "CoresWidget.hpp"
+#include "Theme.hpp"
 #include "pocket/emulator/LibretroCoreProbe.hpp"
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -43,34 +45,105 @@ QString coreFilter()
 CoresWidget::CoresWidget(QWidget* parent) : QWidget(parent)
 {
     auto* layout = new QVBoxLayout(this);
-    auto addRow = [this, layout](CoreRow& row) {
-        auto* name = new QLabel(QString("<b>%1</b> — expected core: %2").arg(row.displayName, row.expectedCore), this);
-        layout->addWidget(name);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(12);
 
-        row.pathEdit = new QLineEdit(this);
+    auto* blockTitle = new QLabel(QStringLiteral("NÚCLEOS DE EMULACIÓN LIBRETRO"), this);
+    blockTitle->setStyleSheet(QStringLiteral(
+        "font-size: 11px;"
+        "font-weight: 700;"
+        "letter-spacing: 1px;"
+        "color: %1;"
+        "background: transparent;"
+        "padding-bottom: 2px;"
+    ).arg(Theme::textSecondary().name()));
+    layout->addWidget(blockTitle);
+
+    auto addRow = [this, layout](CoreRow& row, bool isLast) {
+        auto* rowWidget = new QWidget(this);
+        auto* rowLayout = new QHBoxLayout(rowWidget);
+        rowLayout->setContentsMargins(4, 8, 4, 8);
+        rowLayout->setSpacing(16);
+
+        // System name & expected core (left column)
+        auto* infoCol = new QWidget(rowWidget);
+        infoCol->setFixedWidth(220);
+        auto* infoLayout = new QVBoxLayout(infoCol);
+        infoLayout->setContentsMargins(0, 0, 0, 0);
+        infoLayout->setSpacing(2);
+
+        auto* name = new QLabel(row.displayName, infoCol);
+        QFont nameFont = name->font();
+        nameFont.setBold(true);
+        name->setFont(nameFont);
+        name->setStyleSheet(QStringLiteral("color: %1; font-size: 13px; background: transparent;").arg(Theme::textPrimary().name()));
+
+        auto* expected = new QLabel(QString("Core esperado: %1").arg(row.expectedCore), infoCol);
+        expected->setStyleSheet(QStringLiteral("color: %1; font-size: 11px; background: transparent;").arg(Theme::textSecondary().name()));
+
+        infoLayout->addWidget(name);
+        infoLayout->addWidget(expected);
+        rowLayout->addWidget(infoCol);
+
+        // Status & Path (center column)
+        auto* statusCol = new QWidget(rowWidget);
+        auto* statusLayout = new QVBoxLayout(statusCol);
+        statusLayout->setContentsMargins(0, 0, 0, 0);
+        statusLayout->setSpacing(4);
+
+        row.statusLabel = new QLabel(statusCol);
+        row.statusLabel->setWordWrap(true);
+
+        row.pathEdit = new QLineEdit(statusCol);
         row.pathEdit->setReadOnly(true);
         row.pathEdit->setClearButtonEnabled(false);
         row.pathEdit->setToolTip(row.pathEdit->text());
-        auto* browseButton = new QPushButton("Browse...", this);
-        auto* importButton = new QPushButton("Import...", this);
-        auto* clearButton = new QPushButton("Clear", this);
-        auto* pathLayout = new QHBoxLayout();
-        pathLayout->addWidget(row.pathEdit);
-        pathLayout->addWidget(browseButton);
-        pathLayout->addWidget(importButton);
-        pathLayout->addWidget(clearButton);
-        layout->addLayout(pathLayout);
+        row.pathEdit->setStyleSheet(QStringLiteral(
+            "QLineEdit {"
+            "  background-color: %1;"
+            "  color: %2;"
+            "  border: 1px solid %3;"
+            "  border-radius: 4px;"
+            "  padding: 4px 8px;"
+            "  font-size: 12px;"
+            "}"
+        ).arg(Theme::surfaceRaised().name(), Theme::textPrimary().name(), Theme::border().name()));
 
-        row.statusLabel = new QLabel(this);
-        row.statusLabel->setWordWrap(true);
-        layout->addWidget(row.statusLabel);
+        statusLayout->addWidget(row.statusLabel);
+        statusLayout->addWidget(row.pathEdit);
+        rowLayout->addWidget(statusCol, 1);
+
+        // Actions (right column, discrete buttons)
+        auto* btnCol = new QWidget(rowWidget);
+        auto* btnLayout = new QHBoxLayout(btnCol);
+        btnLayout->setContentsMargins(0, 0, 0, 0);
+        btnLayout->setSpacing(6);
+
+        auto* browseButton = new QPushButton(QStringLiteral("Browse..."), btnCol);
+        auto* importButton = new QPushButton(QStringLiteral("Import..."), btnCol);
+        auto* clearButton = new QPushButton(QStringLiteral("Clear"), btnCol);
+
+        btnLayout->addWidget(browseButton);
+        btnLayout->addWidget(importButton);
+        btnLayout->addWidget(clearButton);
+        rowLayout->addWidget(btnCol);
+
+        layout->addWidget(rowWidget);
+
+        if (!isLast) {
+            auto* sep = new QFrame(this);
+            sep->setFrameShape(QFrame::HLine);
+            sep->setStyleSheet(QStringLiteral("background-color: %1; max-height: 1px; border: none;").arg(Theme::border().name()));
+            layout->addWidget(sep);
+        }
+
         connect(browseButton, &QPushButton::clicked, this, [this, &row] { browse(row); });
         connect(importButton, &QPushButton::clicked, this, [this, &row] { importCore(row); });
         connect(clearButton, &QPushButton::clicked, this, [this, &row] { clear(row); });
     };
 
-    addRow(m_mgba);
-    addRow(m_melonDs);
+    addRow(m_mgba, false);
+    addRow(m_melonDs, true);
     layout->addStretch();
     refresh();
 }
@@ -185,26 +258,27 @@ void CoresWidget::updateStatus(CoreRow& row)
 {
     const QString path = row.pathEdit->text();
     if (path.isEmpty()) {
-        row.statusLabel->setText("Not configured");
-        row.statusLabel->setStyleSheet("color: gray;");
+        row.statusLabel->setText(QStringLiteral("Not configured"));
+        row.statusLabel->setStyleSheet(QStringLiteral("color: %1; font-weight: 500; font-size: 12px;").arg(Theme::textSecondary().name()));
         return;
     }
     if (!QFileInfo::exists(path)) {
-        row.statusLabel->setText("File not found");
-        row.statusLabel->setStyleSheet("color: red;");
+        row.statusLabel->setText(QStringLiteral("No encontrado: el archivo no existe"));
+        row.statusLabel->setStyleSheet(QStringLiteral("color: %1; font-weight: 500; font-size: 12px;").arg(Theme::textDisabled().name()));
         return;
     }
 
     const auto description = Emulator::probeLibretroCore(path.toStdString());
     if (!description.valid) {
-        row.statusLabel->setText(QString::fromStdString(description.error));
-        row.statusLabel->setStyleSheet("color: red;");
+        row.statusLabel->setText(QString("No válido: %1").arg(QString::fromStdString(description.error)));
+        row.statusLabel->setStyleSheet(QStringLiteral("color: %1; font-weight: 500; font-size: 12px;").arg(Theme::textDisabled().name()));
     } else if (!Emulator::coreSupportsSystem(description, row.system)) {
-        row.statusLabel->setText("This core does not report support for " + row.displayName);
-        row.statusLabel->setStyleSheet("color: #b58900;");
+        row.statusLabel->setText(QString("Incompatible: no reporta soporte para %1").arg(row.displayName));
+        row.statusLabel->setStyleSheet(QStringLiteral("color: %1; font-weight: 500; font-size: 12px;").arg(Theme::textSecondary().name()));
     } else {
-        row.statusLabel->setText(QString::fromStdString(description.libraryName + " " + description.libraryVersion).trimmed());
-        row.statusLabel->setStyleSheet("color: green;");
+        const QString coreInfo = QString::fromStdString(description.libraryName + " " + description.libraryVersion).trimmed();
+        row.statusLabel->setText(QString("Presente: %1").arg(coreInfo));
+        row.statusLabel->setStyleSheet(QStringLiteral("color: %1; font-weight: 600; font-size: 12px;").arg(Theme::accent().name()));
     }
 }
 
