@@ -59,6 +59,31 @@ bool tokensMatch(const QString& queryToken, const QStringList& candidateTokens)
     return false;
 }
 
+struct MatchScore {
+    QString name;
+    QString normalizedName;
+    double score{0.0};
+};
+
+MatchScore scoreMatch(const QString& query, const QString& candidate)
+{
+    const QStringList queryTokens = normalized(query).split(' ', Qt::SkipEmptyParts);
+    const QString candidateNormalized = normalized(candidate);
+    QStringList candidateTokens = candidateNormalized.split(' ', Qt::SkipEmptyParts);
+    const QSet<QString> filler{"edicion", "edition", "version", "the", "el", "la"};
+    candidateTokens.erase(std::remove_if(candidateTokens.begin(), candidateTokens.end(), [&filler](const QString& token) {
+        return filler.contains(token);
+    }), candidateTokens.end());
+    int matches = 0;
+    for (const QString& token : queryTokens) {
+        if (tokensMatch(token, candidateTokens)) {
+            ++matches;
+        }
+    }
+    return {candidate, candidateNormalized,
+            queryTokens.isEmpty() ? 0.0 : static_cast<double>(matches) / queryTokens.size()};
+}
+
 } // namespace
 
 namespace Pocket::App {
@@ -88,11 +113,13 @@ void ArtworkIndex::ensureLoaded(const QString& repo)
         reply->deleteLater();
         if (!succeeded) {
             m_loading.remove(repo);
+            emit indexFailed(repo);
             return;
         }
         const QJsonDocument document = QJsonDocument::fromJson(body);
         if (!document.isObject()) {
             m_loading.remove(repo);
+            emit indexFailed(repo);
             return;
         }
         const QJsonArray tree = document.object().value("tree").toArray();
@@ -107,6 +134,7 @@ void ArtworkIndex::ensureLoaded(const QString& repo)
             }
         }
         m_loading.remove(repo);
+        emit indexFailed(repo);
     });
 }
 
@@ -130,38 +158,47 @@ void ArtworkIndex::setNames(const QString& repo, const QStringList& names)
 
 QString ArtworkIndex::bestMatch(const QString& query, const QStringList& names)
 {
-    const QStringList queryTokens = normalized(query).split(' ', Qt::SkipEmptyParts);
-    if (queryTokens.isEmpty()) {
+    const QStringList matches = rankedMatches(query, names, 1);
+    if (matches.isEmpty() || scoreMatch(query, matches.first()).score < 0.6) {
         return {};
     }
+    return matches.first();
+}
 
-    QString result;
-    double bestScore = 0.0;
-    QString bestNormalized;
-    const QSet<QString> filler{"edicion", "edition", "version", "the", "el", "la"};
-    for (const QString& candidate : names) {
-        const QString candidateNormalized = normalized(candidate);
-        QStringList candidateTokens = candidateNormalized.split(' ', Qt::SkipEmptyParts);
-        candidateTokens.erase(std::remove_if(candidateTokens.begin(), candidateTokens.end(), [&filler](const QString& token) {
-            return filler.contains(token);
-        }), candidateTokens.end());
-        int matches = 0;
-        for (const QString& token : queryTokens) {
-            if (tokensMatch(token, candidateTokens)) {
-                ++matches;
-            }
+QStringList ArtworkIndex::rankedMatches(const QString& query, const QStringList& names, int limit)
+{
+    if (limit <= 0) {
+        return {};
+    }
+    if (normalized(query).isEmpty()) {
+        QStringList result = names;
+        std::sort(result.begin(), result.end(), [](const QString& left, const QString& right) {
+            return QString::localeAwareCompare(left, right) < 0;
+        });
+        while (result.size() > limit) {
+            result.removeLast();
         }
-        const double score = static_cast<double>(matches) / queryTokens.size();
-        if (score < 0.6) {
-            continue;
+        return result;
+    }
+    QList<MatchScore> scored;
+    scored.reserve(names.size());
+    for (const QString& name : names) {
+        scored.append(scoreMatch(query, name));
+    }
+    std::sort(scored.begin(), scored.end(), [](const MatchScore& left, const MatchScore& right) {
+        if (left.score != right.score) {
+            return left.score > right.score;
         }
-        if (result.isEmpty() || score > bestScore
-            || (score == bestScore && candidateNormalized.size() < bestNormalized.size())
-            || (score == bestScore && candidateNormalized.size() == bestNormalized.size()
-                && candidate < result)) {
-            result = candidate;
-            bestScore = score;
-            bestNormalized = candidateNormalized;
+        if (left.normalizedName.size() != right.normalizedName.size()) {
+            return left.normalizedName.size() < right.normalizedName.size();
+        }
+        return left.name < right.name;
+    });
+    QStringList result;
+    for (const MatchScore& item : scored) {
+        result.append(item.name);
+        if (result.size() == limit) {
+            break;
         }
     }
     return result;
@@ -201,11 +238,13 @@ void ArtworkIndex::downloadBoxartTree(const QString& repo, const QString& sha)
         reply->deleteLater();
         if (!succeeded) {
             m_loading.remove(repo);
+            emit indexFailed(repo);
             return;
         }
         const QJsonDocument document = QJsonDocument::fromJson(body);
         if (!document.isObject()) {
             m_loading.remove(repo);
+            emit indexFailed(repo);
             return;
         }
         QStringList entries;
@@ -218,6 +257,7 @@ void ArtworkIndex::downloadBoxartTree(const QString& repo, const QString& sha)
         }
         if (entries.isEmpty()) {
             m_loading.remove(repo);
+            emit indexFailed(repo);
             return;
         }
         m_loading.remove(repo);

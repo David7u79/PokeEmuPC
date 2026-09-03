@@ -20,9 +20,12 @@ public:
     void setNames(const QString& repo, const QStringList& names);
 
     static QString bestMatch(const QString& query, const QStringList& names);
+    static QStringList rankedMatches(const QString& query, const QStringList& names,
+                                     int limit = 40);
 
 signals:
     void indexLoaded(const QString& repo);
+    void indexFailed(const QString& repo);
 
 private:
     QString cachePath(const QString& repo) const;

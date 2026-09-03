@@ -2,6 +2,7 @@
 
 #include "GameArtworkLoader.hpp"
 #include "GameCardDelegate.hpp"
+#include "ArtworkPickerDialog.hpp"
 
 #include <QComboBox>
 #include <QDateTime>
@@ -173,7 +174,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     m_detailPath->setWordWrap(false);
     m_playButton = new QPushButton("Jugar", detail);
     m_playButton->setDefault(true);
-    m_searchArtworkButton = new QPushButton("Buscar carátula", detail);
+    m_searchArtworkButton = new QPushButton("Elegir carátula…", detail);
     m_chooseArtworkButton = new QPushButton("Elegir imagen…", detail);
     m_removeButton = new QPushButton("Quitar de la biblioteca", detail);
     detailLayout->addWidget(m_detailCover, 0, Qt::AlignHCenter);
@@ -215,7 +216,14 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     connect(m_playButton, &QPushButton::clicked, this, [this] { playGame(m_grid->currentIndex()); });
     connect(m_searchArtworkButton, &QPushButton::clicked, this, [this] {
         const auto game = gameForIndex(m_grid->currentIndex());
-        if (game) m_artworkLoader->retryArtwork(QString::fromStdString(game->id.toString()), QString::fromStdString(game->title), QString::fromStdString(Core::GameSystemUtils::toString(game->system)), QString::fromStdString(game->romPath));
+        if (!game) {
+            return;
+        }
+        const QString system = QString::fromStdString(Core::GameSystemUtils::toString(game->system));
+        ArtworkPickerDialog dialog(QString::fromStdString(game->title), system, m_artworkLoader, this);
+        if (dialog.exec() == QDialog::Accepted && !dialog.chosenName().isEmpty()) {
+            m_artworkLoader->useIndexName(QString::fromStdString(game->id.toString()), system, dialog.chosenName());
+        }
     });
     connect(m_chooseArtworkButton, &QPushButton::clicked, this, [this] {
         const auto game = gameForIndex(m_grid->currentIndex());
