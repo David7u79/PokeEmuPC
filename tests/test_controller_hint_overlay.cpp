@@ -235,7 +235,9 @@ private slots:
                       {Pocket::Input::InputDevice::Keyboard, Qt::Key_A});
         widget.setControllerMapping(mapping);
         widget.show();
-        QVERIFY(QTest::qWaitForWindowExposed(&widget));
+        // The default 5s wait times out on a loaded machine and fails a test that is
+        // not about window management.
+        QVERIFY(QTest::qWaitForWindowExposed(&widget, 15000));
 
         Pocket::App::ControllerHintOverlay overlay;
         overlay.setSystem(QStringLiteral("NDS"));

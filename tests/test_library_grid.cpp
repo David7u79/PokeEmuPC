@@ -65,7 +65,13 @@ private slots:
     void zoomChangesDelegateSizeHint() {
         QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo); Pocket::App::LibraryWidget widget(repo);
         auto *grid=widget.findChild<QListView*>("gameGrid"); auto *zoom=widget.findChild<QSlider*>("cardZoom"); QVERIFY(grid); QVERIFY(zoom);
-        const QSize before=grid->itemDelegate()->sizeHint(QStyleOptionViewItem(),grid->model()->index(0,0)); zoom->setValue(220); const QSize after=grid->itemDelegate()->sizeHint(QStyleOptionViewItem(),grid->model()->index(0,0)); QVERIFY(after.width()>before.width());
+        // Driven from both ends: the slider starts at the user's remembered zoom, so
+        // comparing against a single hardcoded target passes or fails by accident.
+        zoom->setValue(120);
+        const QSize before=grid->itemDelegate()->sizeHint(QStyleOptionViewItem(),grid->model()->index(0,0));
+        zoom->setValue(240);
+        const QSize after=grid->itemDelegate()->sizeHint(QStyleOptionViewItem(),grid->model()->index(0,0));
+        QVERIFY(after.width()>before.width());
     }
 };
 QTEST_MAIN(LibraryGridTest)
