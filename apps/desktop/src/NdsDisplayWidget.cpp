@@ -104,6 +104,8 @@ void NdsDisplayWidget::paintEvent(QPaintEvent* event) {
         painter.drawImage(m_currentTopRect, m_topImage);
         painter.drawImage(m_currentBottomRect, m_bottomImage);
     }
+    if (framed)
+        m_hintOverlay.paintPressed(painter, size());
     if (framed && m_hintsVisible)
         m_hintOverlay.paintKeyLabels(painter, size());
 }
@@ -112,6 +114,8 @@ void NdsDisplayWidget::setViewMode(EmulatorViewMode mode) {
     if (m_viewMode == mode)
         return;
     m_viewMode = mode;
+    if (mode == EmulatorViewMode::FullScreen)
+        m_hintOverlay.clearPressed();
     QSettings("PocketPartnerProject", "PocketPartner").setValue("emulator/viewMode", mode == EmulatorViewMode::FullScreen ? 1 : 0);
     update();
 }
@@ -122,16 +126,54 @@ void NdsDisplayWidget::toggleViewMode() {
 }
 
 void NdsDisplayWidget::mousePressEvent(QMouseEvent* event) {
-    processTouchEvent(event->pos(), true);
+    if (m_viewMode != EmulatorViewMode::ConsoleFrame || !m_hintOverlay.isValid()) {
+        processTouchEvent(event->pos(), true);
+        return;
+    }
+
+    if (m_transform.touchAt(event->pos())) {
+        m_touchInputActive = true;
+        processTouchEvent(event->pos(), true);
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton) {
+        const QRectF artwork = m_hintOverlay.artworkRect(size());
+        const auto layout = Pocket::Input::ControllerLayout::forSystem(QStringLiteral("NDS"));
+        if (layout && artwork.contains(event->position())) {
+            const double x = (event->position().x() - artwork.left()) / artwork.width();
+            const double y = (event->position().y() - artwork.top()) / artwork.height();
+            if (const auto* control = layout->controlAt(x, y); control && control->isBindable()) {
+                if (const auto button = Pocket::Input::ControllerMapping::emulatorButtonFor(control->id)) {
+                    releaseMouseControl();
+                    m_mousePressedControlId = control->id;
+                    emit buttonInputChanged(*button, true);
+                    m_hintOverlay.setPressed(control->id, true);
+                    update();
+                    event->accept();
+                    return;
+                }
+            }
+        }
+    }
+
+    QWidget::mousePressEvent(event);
 }
 
 void NdsDisplayWidget::mouseMoveEvent(QMouseEvent* event) {
-    if (event->buttons() & Qt::LeftButton)
+    if ((event->buttons() & Qt::LeftButton) && m_mousePressedControlId.isEmpty())
         processTouchEvent(event->pos(), true);
 }
 
 void NdsDisplayWidget::mouseReleaseEvent(QMouseEvent* event) {
-    processTouchEvent(event->pos(), false);
+    if (event->button() == Qt::LeftButton && !m_mousePressedControlId.isEmpty()) {
+        releaseMouseControl();
+        event->accept();
+        return;
+    }
+    if (m_viewMode != EmulatorViewMode::ConsoleFrame || m_touchInputActive)
+        processTouchEvent(event->pos(), false);
+    m_touchInputActive = false;
 }
 
 void NdsDisplayWidget::processTouchEvent(const QPoint& mousePos, bool isPressed) {
@@ -165,6 +207,7 @@ void NdsDisplayWidget::toggleHints() {
 
 void NdsDisplayWidget::refreshKeyBindings() {
     m_keyBindings.clear();
+    m_keyControlIds.clear();
     if (!m_mapping)
         return;
     const auto layout = Pocket::Input::ControllerLayout::forSystem(QStringLiteral("NDS"));
@@ -175,6 +218,7 @@ void NdsDisplayWidget::refreshKeyBindings() {
         const auto binding = m_mapping->binding(QStringLiteral("NDS"), control.id);
         if (button && binding && binding->device == Pocket::Input::InputDevice::Keyboard) {
             m_keyBindings.insert(binding->code, *button);
+            m_keyControlIds.insert(binding->code, control.id);
         }
     }
 }
@@ -195,6 +239,8 @@ void NdsDisplayWidget::keyPressEvent(QKeyEvent* event) {
     }
     if (!event->isAutoRepeat() && m_keyBindings.contains(event->key())) {
         emit buttonInputChanged(m_keyBindings.value(event->key()), true);
+        m_hintOverlay.setPressed(m_keyControlIds.value(event->key()), true);
+        update();
         event->accept();
         return;
     }
@@ -212,6 +258,8 @@ void NdsDisplayWidget::keyReleaseEvent(QKeyEvent* event) {
     }
     if (!event->isAutoRepeat() && m_keyBindings.contains(event->key())) {
         emit buttonInputChanged(m_keyBindings.value(event->key()), false);
+        m_hintOverlay.setPressed(m_keyControlIds.value(event->key()), false);
+        update();
         event->accept();
         return;
     }
@@ -225,7 +273,19 @@ void NdsDisplayWidget::showEvent(QShowEvent* event) {
 
 void NdsDisplayWidget::hideEvent(QHideEvent* event) {
     m_framesEnabled.store(false, std::memory_order_relaxed);
+    m_hintOverlay.clearPressed();
     QWidget::hideEvent(event);
+}
+
+void NdsDisplayWidget::releaseMouseControl()
+{
+    if (m_mousePressedControlId.isEmpty())
+        return;
+    if (const auto button = Pocket::Input::ControllerMapping::emulatorButtonFor(m_mousePressedControlId))
+        emit buttonInputChanged(*button, false);
+    m_hintOverlay.setPressed(m_mousePressedControlId, false);
+    m_mousePressedControlId.clear();
+    update();
 }
 
 } // namespace Pocket::App

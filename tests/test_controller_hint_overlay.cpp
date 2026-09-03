@@ -225,6 +225,43 @@ private slots:
         QVERIFY(!overlay.isPressed(QStringLiteral("A")));
     }
 
+    void ndsWidgetHighlightsAndClicksControls()
+    {
+        Pocket::App::NdsDisplayWidget widget;
+        widget.resize(800, 900);
+        widget.setViewMode(Pocket::App::EmulatorViewMode::ConsoleFrame);
+        auto mapping = std::make_shared<Pocket::Input::ControllerMapping>();
+        mapping->bind(QStringLiteral("NDS"), QStringLiteral("A"),
+                      {Pocket::Input::InputDevice::Keyboard, Qt::Key_A});
+        widget.setControllerMapping(mapping);
+        widget.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&widget));
+
+        Pocket::App::ControllerHintOverlay overlay;
+        overlay.setSystem(QStringLiteral("NDS"));
+        const QRect aRect = overlay.controlRect(QStringLiteral("A"), widget.size()).toAlignedRect();
+        const QRect topRect = overlay.controlRect(QStringLiteral("SCREEN_TOP"), widget.size()).toAlignedRect();
+        const QImage before = widget.grab().toImage();
+        widget.setFocus();
+        QTest::keyPress(&widget, Qt::Key_A);
+        const QImage pressed = widget.grab().toImage();
+        QVERIFY(before.pixelColor(aRect.center()) != pressed.pixelColor(aRect.center()));
+        QVERIFY(before.pixelColor(topRect.center()) == pressed.pixelColor(topRect.center()));
+        QTest::keyRelease(&widget, Qt::Key_A);
+
+        QSignalSpy touchSpy(&widget, &Pocket::App::NdsDisplayWidget::touchInputChanged);
+        QSignalSpy buttonSpy(&widget, &Pocket::App::NdsDisplayWidget::buttonInputChanged);
+        const QRect touchRect = overlay.controlRect(QStringLiteral("TOUCHSCREEN"), widget.size()).toAlignedRect();
+        QTest::mouseClick(&widget, Qt::LeftButton, Qt::NoModifier, touchRect.center());
+        QVERIFY(touchSpy.count() > 0);
+        QCOMPARE(buttonSpy.count(), 0);
+
+        touchSpy.clear();
+        QTest::mouseClick(&widget, Qt::LeftButton, Qt::NoModifier, aRect.center());
+        QCOMPARE(touchSpy.count(), 0);
+        QCOMPARE(buttonSpy.count(), 2);
+    }
+
     void testFramesStayInsideScreenHoles()
     {
         const QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);

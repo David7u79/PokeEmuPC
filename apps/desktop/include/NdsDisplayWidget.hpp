@@ -56,6 +56,7 @@ protected:
 
 private:
     void processTouchEvent(const QPoint& mousePos, bool isPressed);
+    void releaseMouseControl();
 
     NdsScreenLayout m_layoutMode{NdsScreenLayout::Vertical};
     NdsDisplayTransform m_transform;
@@ -66,12 +67,15 @@ private:
     std::atomic_bool m_framesEnabled{false};
     std::shared_ptr<Pocket::Input::ControllerMapping> m_mapping;
     QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
+    QHash<int, QString> m_keyControlIds;
     ControllerHintOverlay m_hintOverlay;
     bool m_hintsVisible{true};
     EmulatorViewMode m_viewMode{EmulatorViewMode::ConsoleFrame};
 
     QRect m_currentTopRect;
     QRect m_currentBottomRect;
+    QString m_mousePressedControlId;
+    bool m_touchInputActive{false};
 };
 
 } // namespace Pocket::App
