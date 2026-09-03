@@ -9,7 +9,10 @@
 
 class QComboBox;
 class QHBoxLayout;
+class QLabel;
 class QPushButton;
+class QTableWidget;
+class QVBoxLayout;
 
 namespace Pocket::App {
 
@@ -29,6 +32,7 @@ signals:
     void mappingChanged();
 
 protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void enterEvent(QEnterEvent* event) override;
@@ -40,6 +44,8 @@ protected:
 private:
     QRect canvasRect() const;
     QRectF targetRect() const;
+    void rebuildTable();
+    void selectControl(const QString& id);
     void updateHover(const QPointF& point);
     void startCapture(const QString& id);
     void clearBinding(const QString& id);
@@ -54,7 +60,8 @@ private:
     QString m_system{"GBA"};
     QString m_hoverId, m_selectedId, m_capturingId;
     QSet<QString> m_conflictIds;
-    QHBoxLayout* m_header{};
+    QVBoxLayout* m_header{};
+    QHBoxLayout* m_content{};
     QComboBox* m_systemSelector{};
     QComboBox* m_scopeSelector{};
     QPushButton* m_keyboardPreset{};
@@ -62,6 +69,10 @@ private:
     QPushButton* m_reset{};
     QPushButton* m_clearAll{};
     QPushButton* m_save{};
+    QTableWidget* m_controlsTable{};
+    QLabel* m_captureBanner{};
+    QPushButton* m_changeKey{};
+    QPushButton* m_remove{};
 };
 
 } // namespace Pocket::App

@@ -49,7 +49,6 @@ void InteractiveControlLayer::paint(QPainter& painter, const QRectF& target, con
 {
     if (!m_layout) return;
     painter.save();
-    const QFontMetrics metrics(painter.font());
     for (const auto& control : m_layout->controls()) {
         ControlVisualState state = states.value(control.id, ControlVisualState::NORMAL);
         const QColor color = colorFor(state);
@@ -60,16 +59,18 @@ void InteractiveControlLayer::paint(QPainter& painter, const QRectF& target, con
         painter.drawRoundedRect(controlRect, 4, 4);
         const QString label = labels.value(control.id);
         if (label.isEmpty()) continue;
-        const int roomRight = bounds.right() - qRound(controlRect.right());
-        const int roomLeft = qRound(controlRect.left()) - bounds.left();
-        const bool right = roomRight >= roomLeft;
-        const int available = qMax(0, (right ? roomRight : roomLeft) - 6);
-        const QString text = metrics.elidedText(label, Qt::ElideRight, available);
-        if (text.isEmpty()) continue;
-        const int x = right ? qRound(controlRect.right()) + 4 : qRound(controlRect.left()) - 4 - metrics.horizontalAdvance(text);
-        const int y = qBound(bounds.top() + metrics.ascent(), qRound(controlRect.center().y()) + metrics.ascent() / 2, bounds.bottom());
+        QFont font = painter.font(); font.setBold(true);
+        bool fits = false;
+        for (int size = qMax(7, qFloor(controlRect.height()) - 6); size >= 7; --size) {
+            font.setPixelSize(size); const QFontMetrics metrics(font);
+            if (metrics.horizontalAdvance(label) + 6 <= controlRect.width() && metrics.height() <= controlRect.height()) { fits = true; break; }
+        }
+        if (!fits) continue;
+        painter.setFont(font);
+        painter.setPen(QColor(0, 0, 0, 200));
+        painter.drawText(controlRect.translated(1, 1), Qt::AlignCenter, label);
         painter.setPen(Qt::white);
-        painter.drawText(x, y, text);
+        painter.drawText(controlRect, Qt::AlignCenter, label);
     }
     painter.restore();
 }
