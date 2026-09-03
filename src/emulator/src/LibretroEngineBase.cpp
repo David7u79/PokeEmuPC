@@ -123,7 +123,90 @@ bool LibretroEngineBase::resolveSymbols() {
     r(m_retro_set_input_state, "retro_set_input_state");
     r(m_retro_get_system_av_info, "retro_get_system_av_info");
     r(m_retro_set_controller_port_device, "retro_set_controller_port_device");
+    // Save states are optional in libretro cores.
+    m_retro_serialize_size = reinterpret_cast<decltype(m_retro_serialize_size)>(m_library.resolve("retro_serialize_size"));
+    m_retro_serialize = reinterpret_cast<decltype(m_retro_serialize)>(m_library.resolve("retro_serialize"));
+    m_retro_unserialize = reinterpret_cast<decltype(m_retro_unserialize)>(m_library.resolve("retro_unserialize"));
     return m_coreError.empty();
+}
+void LibretroEngineBase::setSpeedMultiplier(int multiplier) {
+    m_speedMultiplier.store(std::clamp(multiplier, 1, 5), std::memory_order_relaxed);
+}
+int LibretroEngineBase::speedMultiplier() const {
+    return m_speedMultiplier.load(std::memory_order_relaxed);
+}
+bool LibretroEngineBase::supportsSaveStates() const {
+    return m_gameLoaded && m_retro_serialize_size && m_retro_serialize && m_retro_unserialize;
+}
+std::vector<uint8_t> LibretroEngineBase::saveState() {
+    if (!supportsSaveStates())
+        return {};
+    std::unique_lock<std::mutex> operationLock(m_saveStateOperationMutex);
+    if (!m_running) {
+        const size_t size = m_retro_serialize_size();
+        std::vector<uint8_t> state(size);
+        return size && m_retro_serialize(state.data(), size) ? state : std::vector<uint8_t>{};
+    }
+    auto request = std::make_shared<SaveStateRequest>();
+    request->type = SaveStateRequest::Type::Save;
+    {
+        std::lock_guard<std::mutex> lock(m_saveStateRequestMutex);
+        m_pendingSaveStateRequest = request;
+    }
+    m_saveStateRequestCv.notify_all();
+    std::unique_lock<std::mutex> lock(m_saveStateRequestMutex);
+    if (!m_saveStateRequestCv.wait_for(lock, std::chrono::seconds(2), [&] { return request->complete; })) {
+        if (m_pendingSaveStateRequest == request)
+            m_pendingSaveStateRequest.reset();
+        return {};
+    }
+    return request->succeeded ? request->state : std::vector<uint8_t>{};
+}
+bool LibretroEngineBase::loadState(const std::vector<uint8_t>& state) {
+    if (!supportsSaveStates() || state.empty())
+        return false;
+    std::unique_lock<std::mutex> operationLock(m_saveStateOperationMutex);
+    if (!m_running)
+        return m_retro_unserialize(state.data(), state.size());
+    auto request = std::make_shared<SaveStateRequest>();
+    request->type = SaveStateRequest::Type::Load;
+    request->state = state;
+    {
+        std::lock_guard<std::mutex> lock(m_saveStateRequestMutex);
+        m_pendingSaveStateRequest = request;
+    }
+    m_saveStateRequestCv.notify_all();
+    std::unique_lock<std::mutex> lock(m_saveStateRequestMutex);
+    if (!m_saveStateRequestCv.wait_for(lock, std::chrono::seconds(2), [&] { return request->complete; })) {
+        if (m_pendingSaveStateRequest == request)
+            m_pendingSaveStateRequest.reset();
+        return false;
+    }
+    return request->succeeded;
+}
+void LibretroEngineBase::processPendingSaveStateRequest() {
+    std::shared_ptr<SaveStateRequest> request;
+    {
+        std::lock_guard<std::mutex> lock(m_saveStateRequestMutex);
+        request = m_pendingSaveStateRequest;
+        m_pendingSaveStateRequest.reset();
+    }
+    if (!request)
+        return;
+    if (request->type == SaveStateRequest::Type::Save) {
+        const size_t size = m_retro_serialize_size();
+        request->state.resize(size);
+        request->succeeded = size && m_retro_serialize(request->state.data(), size);
+        if (!request->succeeded)
+            request->state.clear();
+    } else {
+        request->succeeded = m_retro_unserialize(request->state.data(), request->state.size());
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_saveStateRequestMutex);
+        request->complete = true;
+    }
+    m_saveStateRequestCv.notify_all();
 }
 bool LibretroEngineBase::loadRom(const std::string& path) {
     if (!m_hasCore || m_gameLoaded)
@@ -424,14 +507,15 @@ bool LibretroEngineBase::handleEnvironment(unsigned c, void* d) {
 }
 void LibretroEngineBase::executionLoop() {
     using clock = std::chrono::steady_clock;
-    const auto interval = std::chrono::microseconds((long long)(1000000.0 / m_fps));
     auto next = clock::now();
 #ifdef _WIN32
     timeBeginPeriod(1);
 #endif
     while (m_running) {
+        processPendingSaveStateRequest();
         if (!m_paused)
             m_retro_run();
+        const auto interval = std::chrono::microseconds((long long)(1000000.0 / (m_fps * speedMultiplier())));
         next += interval;
         auto now = clock::now();
         if (now > next) {

@@ -7,6 +7,7 @@
 #include <QTemporaryDir>
 #include <array>
 #include <atomic>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -36,6 +37,11 @@ public:
     const LibretroSystemInfo& systemInfo() const { return m_systemInfo; }
     double fps() const { return m_fps; }
     double sampleRate() const { return m_sampleRate; }
+    void setSpeedMultiplier(int multiplier);
+    int speedMultiplier() const;
+    bool supportsSaveStates() const;
+    std::vector<uint8_t> saveState();
+    bool loadState(const std::vector<uint8_t>& state);
     void runFrameUnpaced();
     void sendButtonEvent(EmulatorButton button, bool pressed) override;
     PersistentGameSave getPersistentSave() const override;
@@ -73,6 +79,7 @@ private:
     QTemporaryDir m_workDirectory;
     LibretroSystemInfo m_systemInfo;
     std::atomic<bool> m_running{false}, m_paused{false};
+    std::atomic<int> m_speedMultiplier{1};
     bool m_hasCore{false};
     double m_fps{59.7275}, m_sampleRate{32768.0};
     std::thread m_executionThread;
@@ -83,6 +90,17 @@ private:
     mutable std::mutex m_audioQueueMutex;
     std::set<unsigned> m_unknownEnvironmentCommands;
     std::vector<uint8_t> m_sramBuffer, m_romBuffer;
+    struct SaveStateRequest {
+        enum class Type { Save, Load } type;
+        std::vector<uint8_t> state;
+        bool succeeded{false};
+        bool complete{false};
+    };
+    void processPendingSaveStateRequest();
+    mutable std::mutex m_saveStateRequestMutex;
+    std::mutex m_saveStateOperationMutex;
+    std::condition_variable m_saveStateRequestCv;
+    std::shared_ptr<SaveStateRequest> m_pendingSaveStateRequest;
     void (*m_retro_get_system_info)(retro_system_info*){nullptr};
     void (*m_retro_init)(void){nullptr};
     void (*m_retro_deinit)(void){nullptr};
@@ -98,5 +116,8 @@ private:
     void (*m_retro_set_input_state)(retro_input_state_t){nullptr};
     void (*m_retro_get_system_av_info)(retro_system_av_info*){nullptr};
     void (*m_retro_set_controller_port_device)(unsigned, unsigned){nullptr};
+    size_t (*m_retro_serialize_size)(void){nullptr};
+    bool (*m_retro_serialize)(void*, size_t){nullptr};
+    bool (*m_retro_unserialize)(const void*, size_t){nullptr};
 };
 } // namespace Pocket::Emulator

@@ -25,6 +25,9 @@ public:
     void stopEmulator();
     void setCoreLibraryPath(const QString& path);
     void setStatusMessage(const QString& message);
+    Pocket::Emulator::LibretroEngineBase* engine() const { return m_engine.get(); }
+    AudioSink& audioSink() { return m_audioSink; }
+    QString savePath() const { return m_savePath; }
 
     // The bindings the user configured in Settings -> Controls.
     void setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping);
