@@ -2,15 +2,16 @@
 
 #include "GameArtworkLoader.hpp"
 #include "GameCardDelegate.hpp"
+#include "GameInspector.hpp"
 #include "ArtworkPickerDialog.hpp"
 #include "EmptyStateWidget.hpp"
 #include "LibrarySidebar.hpp"
 #include "Theme.hpp"
 
 #include <QComboBox>
-#include <QDateTime>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QDesktopServices>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -43,16 +44,6 @@ QString systemForCategory(const QString& category)
 {
     if (category == "GB" || category == "GBC" || category == "GBA" || category == "NDS") return category;
     return {};
-}
-
-QString initials(const QString& title)
-{
-    QString result;
-    for (const QString& word : title.split(' ', Qt::SkipEmptyParts)) {
-        result += word.left(1).toUpper();
-        if (result.size() == 2) break;
-    }
-    return result.isEmpty() ? QStringLiteral("?") : result;
 }
 
 class GameProxyModel final : public QSortFilterProxyModel {
@@ -185,39 +176,8 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     center->addWidget(m_emptyState);
     content->addLayout(center, 1);
 
-    auto* detail = new QWidget(this);
-    detail->setFixedWidth(300);
-    auto* detailLayout = new QVBoxLayout(detail);
-    m_detailCover = new QLabel(detail);
-    m_detailCover->setObjectName("detailCover");
-    m_detailCover->setFixedSize(260, 260);
-    m_detailCover->setAlignment(Qt::AlignCenter);
-    m_detailTitle = new QLabel("Selecciona un juego", detail);
-    m_detailTitle->setObjectName("detailTitle");
-    m_detailTitle->setAlignment(Qt::AlignCenter);
-    QFont detailTitleFont = m_detailTitle->font();
-    detailTitleFont.setBold(true);
-    m_detailTitle->setFont(detailTitleFont);
-    m_detailInfo = new QLabel(detail);
-    m_detailInfo->setWordWrap(true);
-    m_detailPath = new QLabel(detail);
-    m_detailPath->setWordWrap(false);
-    m_playButton = new QPushButton("Jugar", detail);
-    m_playButton->setDefault(true);
-    m_searchArtworkButton = new QPushButton("Elegir carátula…", detail);
-    m_chooseArtworkButton = new QPushButton("Elegir imagen…", detail);
-    m_removeButton = new QPushButton("Quitar de la biblioteca", detail);
-    detailLayout->setSpacing(6);
-    detailLayout->addWidget(m_detailCover, 0, Qt::AlignHCenter);
-    detailLayout->addWidget(m_detailTitle);
-    detailLayout->addWidget(m_detailInfo);
-    detailLayout->addWidget(m_detailPath);
-    detailLayout->addWidget(m_playButton);
-    detailLayout->addWidget(m_searchArtworkButton);
-    detailLayout->addWidget(m_chooseArtworkButton);
-    detailLayout->addWidget(m_removeButton);
-    detailLayout->addStretch();
-    content->addWidget(detail);
+    m_inspector = new GameInspector(this);
+    content->addWidget(m_inspector);
     mainLayout->addLayout(content, 1);
 
     m_artworkLoader = new GameArtworkLoader(this);
@@ -240,8 +200,8 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     connect(m_grid, &QListView::activated, this, &LibraryWidget::playGame);
     connect(m_grid, &QListView::doubleClicked, this, &LibraryWidget::playGame);
     connect(m_grid->selectionModel(), &QItemSelectionModel::currentChanged, this, &LibraryWidget::updateDetail);
-    connect(m_playButton, &QPushButton::clicked, this, [this] { playGame(m_grid->currentIndex()); });
-    connect(m_searchArtworkButton, &QPushButton::clicked, this, [this] {
+    connect(m_inspector, &GameInspector::playRequested, this, [this] { playGame(m_grid->currentIndex()); });
+    connect(m_inspector, &GameInspector::changeArtworkRequested, this, [this] {
         const auto game = gameForIndex(m_grid->currentIndex());
         if (!game) {
             return;
@@ -252,12 +212,19 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
             m_artworkLoader->useIndexName(QString::fromStdString(game->id.toString()), system, dialog.chosenName());
         }
     });
-    connect(m_chooseArtworkButton, &QPushButton::clicked, this, [this] {
+    connect(m_inspector, &GameInspector::chooseImageRequested, this, [this] {
         const auto game = gameForIndex(m_grid->currentIndex());
         const QString path = QFileDialog::getOpenFileName(this, "Elegir imagen", {}, "Images (*.png *.jpg *.jpeg *.bmp *.webp)");
         if (game && !path.isEmpty()) m_artworkLoader->setArtworkFromFile(QString::fromStdString(game->id.toString()), path);
     });
-    connect(m_removeButton, &QPushButton::clicked, this, &LibraryWidget::removeSelectedGame);
+    connect(m_inspector, &GameInspector::removeRequested, this, &LibraryWidget::removeSelectedGame);
+    connect(m_inspector, &GameInspector::openLocationRequested, this, [this] {
+        const auto game = gameForIndex(m_grid->currentIndex());
+        if (game) {
+            const QString path = QFileInfo(QString::fromStdString(game->romPath)).absolutePath();
+            QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+        }
+    });
     connect(new QShortcut(QKeySequence::Delete, m_grid), &QShortcut::activated, this, &LibraryWidget::removeSelectedGame);
     connect(m_cardZoom, &QSlider::valueChanged, this, [this](int width) {
         m_delegate->setCardWidth(width);
@@ -386,33 +353,11 @@ std::optional<Core::Game> LibraryWidget::gameForIndex(const QModelIndex& index) 
 void LibraryWidget::updateDetail(const QModelIndex& index)
 {
     const auto game = gameForIndex(index);
-    const bool hasGame = game.has_value();
-    m_playButton->setEnabled(hasGame);
-    m_searchArtworkButton->setEnabled(hasGame);
-    m_chooseArtworkButton->setEnabled(hasGame);
-    m_removeButton->setEnabled(hasGame);
-    if (!hasGame) {
-        m_detailTitle->setText("Selecciona un juego");
-        m_detailTitle->setStyleSheet("color: palette(mid);");
-        m_detailInfo->clear();
-        m_detailPath->clear();
-        m_detailCover->clear();
+    if (!game) {
+        m_inspector->clear();
         return;
     }
-    m_detailTitle->setStyleSheet(QString());
-    m_detailTitle->setText(QString::fromStdString(game->title));
-    const QString imported = QDateTime::fromSecsSinceEpoch(game->importedAtTs).date().toString("dd/MM/yyyy");
-    m_detailInfo->setText(QString("%1\n%2 MB\nImportado: %3").arg(QString::fromStdString(Core::GameSystemUtils::toString(game->system))).arg(game->fileSizeBytes / (1024.0 * 1024.0), 0, 'f', 1).arg(imported));
-    const QString romPath = QString::fromStdString(game->romPath);
-    m_detailPath->setText(fontMetrics().elidedText(romPath, Qt::ElideMiddle, 280));
-    m_detailPath->setToolTip(romPath);
-    QPixmap pixmap(index.data(ArtworkRole).toString());
-    if (!pixmap.isNull()) {
-        m_detailCover->setPixmap(pixmap.scaled(260, 260, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    } else {
-        m_detailCover->setPixmap(QPixmap());
-        m_detailCover->setText(initials(QString::fromStdString(game->title)));
-    }
+    m_inspector->setGame(*game, index.data(ArtworkRole).toString());
 }
 
 void LibraryWidget::playGame(const QModelIndex& index)
