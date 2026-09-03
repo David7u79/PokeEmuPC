@@ -7,6 +7,7 @@
 #include "CoresWidget.hpp"
 #include "DevAssets.hpp"
 #include "pocket/emulator/LibretroCoreProbe.hpp"
+#include "../apps/desktop/src/Theme.cpp"
 
 using namespace Pocket;
 

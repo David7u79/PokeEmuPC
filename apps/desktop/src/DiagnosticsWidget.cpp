@@ -1,10 +1,13 @@
 #include "DiagnosticsWidget.hpp"
+#include "Theme.hpp"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QGroupBox>
+#include <QScrollArea>
+#include <QFrame>
 #include <QFileDialog>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QFontDatabase>
 #include <chrono>
 #include <QFileInfo>
 #include "pocket/save/CompanionReidentifier.hpp"
@@ -15,77 +18,146 @@
 
 namespace Pocket::App {
 
+namespace {
+
+QLabel* createBlockTitle(const QString& text, QWidget* parent)
+{
+    auto* label = new QLabel(text.toUpper(), parent);
+    label->setStyleSheet(QStringLiteral(
+        "font-size: 11px;"
+        "font-weight: 700;"
+        "letter-spacing: 1px;"
+        "color: %1;"
+        "background: transparent;"
+        "padding-bottom: 2px;"
+    ).arg(Theme::textSecondary().name()));
+    return label;
+}
+
+} // namespace
+
 DiagnosticsWidget::DiagnosticsWidget(QWidget *parent)
     : QWidget(parent)
     , m_ipcServer("PocketPartnerIPC", this) {
 
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(15, 15, 15, 15);
+    auto* rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
 
-    QGroupBox *headerGroup = new QGroupBox("Developer Save File Inspector (Gen I - Gen V)", this);
-    QHBoxLayout *headerLayout = new QHBoxLayout(headerGroup);
+    auto* scrollArea = new QScrollArea(this);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; border: none; }"));
 
-    m_openFileBtn = new QPushButton("Inspect Save File (.sav)...", headerGroup);
-    m_statusLabel = new QLabel("No save file loaded", headerGroup);
-    m_statusLabel->setStyleSheet("font-weight: bold; color: #88AACC;");
+    auto* contentWidget = new QWidget(scrollArea);
+    contentWidget->setStyleSheet(QStringLiteral("background: transparent;"));
+    auto* layout = new QVBoxLayout(contentWidget);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(14);
+
+    const QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+
+    const QString tableStyle = QStringLiteral(
+        "QTableWidget {"
+        "  background-color: %1;"
+        "  color: %2;"
+        "  border: 1px solid %3;"
+        "  border-radius: 6px;"
+        "  gridline-color: %3;"
+        "}"
+        "QHeaderView::section {"
+        "  background-color: %4;"
+        "  color: %5;"
+        "  border: 1px solid %3;"
+        "  padding: 4px 8px;"
+        "  font-size: 11px;"
+        "  font-weight: 600;"
+        "}"
+        "QTableWidget::item:selected {"
+        "  background-color: %6;"
+        "  color: %2;"
+        "}"
+    ).arg(Theme::surfaceRaised().name(),
+         Theme::textPrimary().name(),
+         Theme::border().name(),
+         Theme::surface().name(),
+         Theme::textSecondary().name(),
+         Theme::border().name());
+
+    // Block 1: Save File Inspector Header
+    layout->addWidget(createBlockTitle(QStringLiteral("Inspector de partidas (Gen I - Gen V)"), contentWidget));
+
+    auto* headerLayout = new QHBoxLayout();
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setSpacing(12);
+
+    m_openFileBtn = new QPushButton(QStringLiteral("Inspect Save File (.sav)..."), contentWidget);
+    m_statusLabel = new QLabel(QStringLiteral("No save file loaded"), contentWidget);
+    m_statusLabel->setFont(monoFont);
+    m_statusLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: %1; background: transparent;").arg(Theme::textSecondary().name()));
 
     headerLayout->addWidget(m_openFileBtn);
     headerLayout->addWidget(m_statusLabel);
     headerLayout->addStretch();
+    layout->addLayout(headerLayout);
 
-    QGroupBox *trainerGroup = new QGroupBox("Trainer Info & Active Companion Status", this);
-    QVBoxLayout *trainerLayout = new QVBoxLayout(trainerGroup);
+    // Block 2: Trainer Info & Active Companion Status
+    layout->addWidget(createBlockTitle(QStringLiteral("Información del entrenador y compañero"), contentWidget));
 
-    m_trainerLabel = new QLabel("Trainer: -- | Play Time: --", trainerGroup);
-    m_activeCompanionLabel = new QLabel("Active Companion: None selected", trainerGroup);
-    m_activeCompanionLabel->setStyleSheet("font-weight: bold; color: #A3BE8C;");
+    auto* trainerLayout = new QVBoxLayout();
+    trainerLayout->setContentsMargins(0, 0, 0, 0);
+    trainerLayout->setSpacing(4);
 
-    m_bondVsFriendshipLabel = new QLabel("App Bond (PocketPartner XP): Lv 1 | Game Friendship: --", trainerGroup);
-    m_bondVsFriendshipLabel->setStyleSheet("font-size: 11px; color: #EBCB8B; font-weight: bold;");
+    m_trainerLabel = new QLabel(QStringLiteral("Trainer: -- | Play Time: --"), contentWidget);
+    m_trainerLabel->setStyleSheet(QStringLiteral("color: %1; background: transparent;").arg(Theme::textPrimary().name()));
 
-    m_selectCompanionBtn = new QPushButton("★ Set Selected Party Row as Active Desktop Companion", trainerGroup);
+    m_activeCompanionLabel = new QLabel(QStringLiteral("Active Companion: None selected"), contentWidget);
+    m_activeCompanionLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: %1; background: transparent;").arg(Theme::textSecondary().name()));
+
+    m_bondVsFriendshipLabel = new QLabel(QStringLiteral("App Bond (PocketPartner XP): Lv 1 | Game Friendship: --"), contentWidget);
+    m_bondVsFriendshipLabel->setStyleSheet(QStringLiteral("font-size: 12px; color: %1; background: transparent;").arg(Theme::textSecondary().name()));
+
+    m_selectCompanionBtn = new QPushButton(QStringLiteral("★ Set Selected Party Row as Active Desktop Companion"), contentWidget);
     m_selectCompanionBtn->setEnabled(false);
 
     trainerLayout->addWidget(m_trainerLabel);
     trainerLayout->addWidget(m_activeCompanionLabel);
     trainerLayout->addWidget(m_bondVsFriendshipLabel);
     trainerLayout->addWidget(m_selectCompanionBtn);
+    layout->addLayout(trainerLayout);
 
-    // Timing Bar Training Mini-Activity
-    QGroupBox *trainingGroup = new QGroupBox("Companion Training Mini-Activity", this);
-    QVBoxLayout *trainingLayout = new QVBoxLayout(trainingGroup);
-    m_timingBarWidget = new TrainingTimingBarWidget(trainingGroup);
-    trainingLayout->addWidget(m_timingBarWidget);
+    // Block 3: Companion Training Mini-Activity
+    layout->addWidget(createBlockTitle(QStringLiteral("Mini-actividad de entrenamiento"), contentWidget));
+    m_timingBarWidget = new TrainingTimingBarWidget(contentWidget);
+    layout->addWidget(m_timingBarWidget);
 
-    // Pending Reward Ledger Section
-    QGroupBox *ledgerGroup = new QGroupBox("Pending Game Reward Ledger (Staged - Save Unmodified)", this);
-    QVBoxLayout *ledgerLayout = new QVBoxLayout(ledgerGroup);
+    // Block 4: Pending Reward Ledger Section
+    layout->addWidget(createBlockTitle(QStringLiteral("Registro de recompensas pendientes (sin modificar partida)"), contentWidget));
 
-    m_ledgerTable = new QTableWidget(0, 5, ledgerGroup);
+    m_ledgerTable = new QTableWidget(0, 5, contentWidget);
+    m_ledgerTable->setStyleSheet(tableStyle);
     m_ledgerTable->setHorizontalHeaderLabels({"Reward ID", "Category", "Stat Target", "Points Staged", "Source Action"});
     m_ledgerTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_ledgerTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_ledgerTable->setMinimumHeight(120);
 
-    ledgerLayout->addWidget(m_ledgerTable);
+    layout->addWidget(m_ledgerTable);
 
-    // Party Table Section
-    QGroupBox *partyGroup = new QGroupBox("Parsed Party Pokémon (Read-Only Save Data)", this);
-    QVBoxLayout *partyLayout = new QVBoxLayout(partyGroup);
+    // Block 5: Party Table Section
+    layout->addWidget(createBlockTitle(QStringLiteral("Pokémon en el equipo (datos de solo lectura)"), contentWidget));
 
-    m_partyTable = new QTableWidget(0, 8, partyGroup);
+    m_partyTable = new QTableWidget(0, 8, contentWidget);
+    m_partyTable->setStyleSheet(tableStyle);
     m_partyTable->setHorizontalHeaderLabels({"Slot", "Species", "Nickname", "Level", "Nature / Gen", "EVs / StatExp", "IVs / DVs", "PID / ID"});
     m_partyTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_partyTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_partyTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_partyTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_partyTable->setMinimumHeight(160);
 
-    partyLayout->addWidget(m_partyTable);
+    layout->addWidget(m_partyTable);
 
-    layout->addWidget(headerGroup);
-    layout->addWidget(trainerGroup);
-    layout->addWidget(trainingGroup);
-    layout->addWidget(ledgerGroup);
-    layout->addWidget(partyGroup);
+    scrollArea->setWidget(contentWidget);
+    rootLayout->addWidget(scrollArea);
 
     connect(m_openFileBtn, &QPushButton::clicked, this, &DiagnosticsWidget::onOpenFileClicked);
     connect(m_selectCompanionBtn, &QPushButton::clicked, this, &DiagnosticsWidget::onSelectCompanionClicked);
@@ -128,10 +200,12 @@ void DiagnosticsWidget::loadAndInspectSave(const QString& saveFilePath) {
         m_lastParseResult = m_parser.parseSaveFile(saveFilePath.toStdString());
     }
 
+    const QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+
     if (m_lastParseResult.status != Pocket::Save::SaveParseStatus::Success) {
         m_statusLabel->setText(QString("Failed: %1").arg(QString::fromStdString(m_lastParseResult.errorMessage)));
-        m_statusLabel->setStyleSheet("font-weight: bold; color: #FF5252;");
-        m_trainerLabel->setText("Trainer: --");
+        m_statusLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: %1; background: transparent;").arg(Theme::textDisabled().name()));
+        m_trainerLabel->setText(QStringLiteral("Trainer: --"));
         m_partyTable->setRowCount(0);
         m_selectCompanionBtn->setEnabled(false);
         return;
@@ -140,7 +214,7 @@ void DiagnosticsWidget::loadAndInspectSave(const QString& saveFilePath) {
     QString slotName = (m_lastParseResult.activeSlotIndex == 0) ? "Slot A / Primary" : "Slot B / Backup";
     m_statusLabel->setText(QString("Active Slot: %1 | Save Counter: %2 | Checksums: VALID")
         .arg(slotName).arg(m_lastParseResult.saveCounter));
-    m_statusLabel->setStyleSheet("font-weight: bold; color: #4CAF50;");
+    m_statusLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: %1; background: transparent;").arg(Theme::accent().name()));
 
     m_trainerLabel->setText(QString("Trainer: %1 (ID: %2) | Saved Party Count: %3")
         .arg(QString::fromStdString(m_lastParseResult.trainerName))
@@ -153,21 +227,47 @@ void DiagnosticsWidget::loadAndInspectSave(const QString& saveFilePath) {
         int row = m_partyTable->rowCount();
         m_partyTable->insertRow(row);
 
-        m_partyTable->setItem(row, 0, new QTableWidgetItem(QString::number(i + 1)));
+        auto* slotItem = new QTableWidgetItem(QString::number(i + 1));
+        slotItem->setFont(monoFont);
+        slotItem->setTextAlignment(Qt::AlignCenter);
+        m_partyTable->setItem(row, 0, slotItem);
+
         m_partyTable->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(pkmn.speciesName)));
         m_partyTable->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(pkmn.nickname)));
-        m_partyTable->setItem(row, 3, new QTableWidgetItem(QString::number(pkmn.level)));
+
+        auto* lvlItem = new QTableWidgetItem(QString::number(pkmn.level));
+        lvlItem->setFont(monoFont);
+        lvlItem->setTextAlignment(Qt::AlignCenter);
+        m_partyTable->setItem(row, 3, lvlItem);
 
         if (pkmn.generation >= Pocket::Save::GenerationType::Gen3) {
             m_partyTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(Pocket::Save::natureToString(pkmn.nature))));
-            m_partyTable->setItem(row, 5, new QTableWidgetItem(QString("EV: %1/%2/%3").arg(pkmn.evs.hp).arg(pkmn.evs.attack).arg(pkmn.evs.defense)));
-            m_partyTable->setItem(row, 6, new QTableWidgetItem(QString("IV: %1/%2/%3").arg(pkmn.ivs.hp).arg(pkmn.ivs.attack).arg(pkmn.ivs.defense)));
-            m_partyTable->setItem(row, 7, new QTableWidgetItem(QString("0x%1").arg(pkmn.personalityValue, 8, 16, QChar('0')).toUpper()));
+
+            auto* evItem = new QTableWidgetItem(QString("EV: %1/%2/%3").arg(pkmn.evs.hp).arg(pkmn.evs.attack).arg(pkmn.evs.defense));
+            evItem->setFont(monoFont);
+            m_partyTable->setItem(row, 5, evItem);
+
+            auto* ivItem = new QTableWidgetItem(QString("IV: %1/%2/%3").arg(pkmn.ivs.hp).arg(pkmn.ivs.attack).arg(pkmn.ivs.defense));
+            ivItem->setFont(monoFont);
+            m_partyTable->setItem(row, 6, ivItem);
+
+            auto* pidItem = new QTableWidgetItem(QString("0x%1").arg(pkmn.personalityValue, 8, 16, QChar('0')).toUpper());
+            pidItem->setFont(monoFont);
+            m_partyTable->setItem(row, 7, pidItem);
         } else {
             m_partyTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(Pocket::Save::generationTypeToString(pkmn.generation))));
-            m_partyTable->setItem(row, 5, new QTableWidgetItem(QString("Exp: %1/%2/%3").arg(pkmn.statExp.hp).arg(pkmn.statExp.attack).arg(pkmn.statExp.defense)));
-            m_partyTable->setItem(row, 6, new QTableWidgetItem(QString("DV: %1/%2/%3").arg(pkmn.dvs.hp).arg(pkmn.dvs.attack).arg(pkmn.dvs.defense)));
-            m_partyTable->setItem(row, 7, new QTableWidgetItem(QString("ID: %1").arg(pkmn.trainer.trainerId)));
+
+            auto* expItem = new QTableWidgetItem(QString("Exp: %1/%2/%3").arg(pkmn.statExp.hp).arg(pkmn.statExp.attack).arg(pkmn.statExp.defense));
+            expItem->setFont(monoFont);
+            m_partyTable->setItem(row, 5, expItem);
+
+            auto* dvItem = new QTableWidgetItem(QString("DV: %1/%2/%3").arg(pkmn.dvs.hp).arg(pkmn.dvs.attack).arg(pkmn.dvs.defense));
+            dvItem->setFont(monoFont);
+            m_partyTable->setItem(row, 6, dvItem);
+
+            auto* idItem = new QTableWidgetItem(QString("ID: %1").arg(pkmn.trainer.trainerId));
+            idItem->setFont(monoFont);
+            m_partyTable->setItem(row, 7, idItem);
         }
     }
 
@@ -189,6 +289,7 @@ void DiagnosticsWidget::onSelectCompanionClicked() {
         .arg(QString::fromStdString(m_currentLink.speciesName))
         .arg(m_currentLink.level)
         .arg(QString::fromStdString(Pocket::Save::generationTypeToString(selectedPkmn.generation))));
+    m_activeCompanionLabel->setStyleSheet(QStringLiteral("font-weight: 600; color: %1; background: transparent;").arg(Theme::accent().name()));
 
     if (selectedPkmn.hasFriendship) {
         m_bondVsFriendshipLabel->setText(QString("App Bond (PocketPartner XP): Lv 1 | Game Friendship (Canonical): %1")
@@ -196,6 +297,7 @@ void DiagnosticsWidget::onSelectCompanionClicked() {
     } else {
         m_bondVsFriendshipLabel->setText("App Bond (PocketPartner XP): Lv 1 | Game Friendship: N/A (Gen I)");
     }
+    m_bondVsFriendshipLabel->setStyleSheet(QStringLiteral("font-size: 12px; color: %1; background: transparent;").arg(Theme::textSecondary().name()));
 
     // Send IPC Message to Desktop Companion Widget
     Pocket::Core::IpcMessage msg;
@@ -247,6 +349,7 @@ void DiagnosticsWidget::onTrainingCompleted(Pocket::Save::EVType stat, int evPoi
 }
 
 void DiagnosticsWidget::refreshLedgerDisplay() {
+    const QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     auto rewards = m_ledger.getPendingRewards(m_currentLink.gameId);
     m_ledgerTable->setRowCount(0);
 
@@ -254,10 +357,19 @@ void DiagnosticsWidget::refreshLedgerDisplay() {
         int row = m_ledgerTable->rowCount();
         m_ledgerTable->insertRow(row);
 
-        m_ledgerTable->setItem(row, 0, new QTableWidgetItem(QString::number(r.rewardId)));
+        auto* idItem = new QTableWidgetItem(QString::number(r.rewardId));
+        idItem->setFont(monoFont);
+        idItem->setTextAlignment(Qt::AlignCenter);
+        m_ledgerTable->setItem(row, 0, idItem);
+
         m_ledgerTable->setItem(row, 1, new QTableWidgetItem("EV Reward"));
         m_ledgerTable->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(Pocket::Save::evTypeToString(r.evStat))));
-        m_ledgerTable->setItem(row, 3, new QTableWidgetItem(QString("+%1 EV").arg(r.amount)));
+
+        auto* amountItem = new QTableWidgetItem(QString("+%1 EV").arg(r.amount));
+        amountItem->setFont(monoFont);
+        amountItem->setTextAlignment(Qt::AlignCenter);
+        m_ledgerTable->setItem(row, 3, amountItem);
+
         m_ledgerTable->setItem(row, 4, new QTableWidgetItem(QString::fromStdString(r.sourceAction)));
     }
 }
