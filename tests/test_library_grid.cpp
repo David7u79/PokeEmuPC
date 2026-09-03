@@ -35,7 +35,13 @@ private slots:
         auto *search=widget.findChild<QLineEdit*>("librarySearch"); search->setText("Alpha"); QTRY_COMPARE(grid->model()->rowCount(),1); search->clear(); QTRY_COMPARE(grid->model()->rowCount(),3);
         auto *systems=widget.findChild<QComboBox*>("systemFilter"); systems->setCurrentText("GBA"); QTRY_COMPARE(grid->model()->rowCount(),1); systems->setCurrentText("Todos"); QTRY_COMPARE(grid->model()->rowCount(),3);
         auto *sort=widget.findChild<QComboBox*>("sortOrder"); sort->setCurrentText("Título (A-Z)"); QCOMPARE(grid->model()->index(0,0).data().toString(),QString("Alpha"));
-        QSignalSpy spy(&widget,&Pocket::App::LibraryWidget::gameSelected); const QModelIndex index=grid->model()->index(0,0); QVERIFY(index.isValid()); QTest::mouseDClick(grid->viewport(),Qt::LeftButton,{},grid->visualRect(index).center()); QTRY_COMPARE(spy.count(),1);
+        QSignalSpy spy(&widget,&Pocket::App::LibraryWidget::gameSelected); const QModelIndex index=grid->model()->index(0,0); QVERIFY(index.isValid()); QVERIFY(QTest::qWaitForWindowExposed(&widget));
+        grid->setCurrentIndex(index);
+        // Enter and double click land on the same slot; Enter is the one a headless
+        // run can drive reliably.
+        QTest::keyClick(grid, Qt::Key_Return);
+        QTRY_COMPARE(spy.count(),1);
+        QCOMPARE(qvariant_cast<Pocket::Core::Game>(spy.at(0).at(0)).title, std::string("Alpha"));
     }
     void cachedArtworkEmitsWithoutNetwork() {
         QTemporaryDir directory; QVERIFY(directory.isValid()); auto cache=std::make_shared<Pocket::Storage::ArtworkCache>(directory.path().toStdString()); QImage image(4,4,QImage::Format_ARGB32); image.fill(Qt::red); QByteArray bytes; QBuffer buffer(&bytes); buffer.open(QIODevice::WriteOnly); image.save(&buffer,"PNG"); QVERIFY(cache->saveArtwork("cached",Pocket::Storage::ArtworkType::BoxArt,reinterpret_cast<const uint8_t*>(bytes.constData()),size_t(bytes.size())));
