@@ -1,5 +1,7 @@
 #include "GameCardDelegate.hpp"
 
+#include "Theme.hpp"
+
 #include <QPainter>
 #include <QPainterPath>
 #include <QLinearGradient>
@@ -43,9 +45,7 @@ void GameCardDelegate::setCardWidth(int width)
 
 QSize GameCardDelegate::sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const
 {
-    // Square cover area: these boxes are wider than they are tall, and a 3:4 card
-    // could only fit them by cropping the sides off.
-    return {m_cardWidth, m_cardWidth + 34};
+    return {m_cardWidth, m_cardWidth + 42};
 }
 
 void GameCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
@@ -54,7 +54,6 @@ void GameCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setRenderHint(QPainter::SmoothPixmapTransform);
     QRect card = option.rect.adjusted(1, 1, -1, -1);
-    const QPalette& palette = option.palette;
     const bool selected = option.state & QStyle::State_Selected;
     const bool hovered = option.state & QStyle::State_MouseOver;
     if (hovered) card.translate(0, -2);
@@ -65,12 +64,24 @@ void GameCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     painter->setBrush(shadowColor);
     painter->drawRoundedRect(shadow, 10, 10);
 
-    const QRect cover(card.left(), card.top(), card.width(), card.height() - 34);
-    const QRect bottomBar(card.left(), cover.bottom() + 1, card.width(), 34);
+    const QRect cover(card.left(), card.top(), card.width(), card.width());
+    const QRect textArea(card.left(), cover.bottom() + 1, card.width(), card.bottom() - cover.bottom());
     const QString title = index.data().toString();
     const QString system = index.data(SystemRole).toString();
     const QString artworkPath = index.data(ArtworkRole).toString();
     QPixmap pixmap(artworkPath);
+    QColor cardBackground = Theme::surfaceRaised();
+    if (selected) {
+        cardBackground = cardBackground.lighter(108);
+    }
+    painter->setPen(QPen(Theme::border(), 1));
+    painter->setBrush(cardBackground);
+    painter->drawRoundedRect(card, 8, 8);
+
+    painter->save();
+    QPainterPath coverClip;
+    coverClip.addRoundedRect(cover, 8, 8);
+    painter->setClipPath(coverClip);
     if (!artworkPath.isEmpty() && !pixmap.isNull()) {
         // Whole cover, never cropped: the box is part of what the player recognises.
         // Any space it leaves is filled by the console's own colour.
@@ -80,7 +91,7 @@ void GameCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
         backdrop.setColorAt(1, color.darker(150));
         painter->setPen(Qt::NoPen);
         painter->setBrush(backdrop);
-        painter->drawRoundedRect(cover, 10, 10);
+        painter->drawRect(cover);
         const QSize scaledSize = pixmap.size().scaled(cover.size() - QSize(8, 8), Qt::KeepAspectRatio);
         painter->drawPixmap(QRect(cover.center() - QPoint(scaledSize.width() / 2, scaledSize.height() / 2), scaledSize), pixmap);
     } else {
@@ -90,7 +101,7 @@ void GameCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
         gradient.setColorAt(1, color.darker(115));
         painter->setPen(Qt::NoPen);
         painter->setBrush(gradient);
-        painter->drawRoundedRect(cover, 10, 10);
+        painter->drawRect(cover);
         QFont font = option.font;
         font.setPixelSize(qMax(16, cover.width() / 3));
         font.setBold(true);
@@ -101,51 +112,33 @@ void GameCardDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
         painter->drawText(cover, Qt::AlignCenter, initials(title));
     }
 
-    QFont badgeFont = option.font;
-    badgeFont.setPixelSize(9);
-    painter->setFont(badgeFont);
-    const QRect badgeText = painter->fontMetrics().boundingRect(system);
-    const QRect badge(cover.right() - badgeText.width() - 16, cover.top() + 6, badgeText.width() + 10, badgeText.height() + 6);
-    QColor badgeBackground(Qt::black);
-    badgeBackground.setAlphaF(0.55);
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(badgeBackground);
-    painter->drawRoundedRect(badge, badge.height() / 2, badge.height() / 2);
-    painter->setPen(Qt::white);
-    painter->drawText(badge, Qt::AlignCenter, system);
-
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(palette.base());
-    painter->drawRect(bottomBar);
+    painter->restore();
 
     QFont titleFont = option.font;
     titleFont.setPixelSize(qMax(9, 12 * m_cardWidth / 176));
     titleFont.setBold(true);
     painter->setFont(titleFont);
-    painter->setPen(palette.text().color());
-    const QRect titleRect(bottomBar.left() + 8, bottomBar.top() + 2, bottomBar.width() - 16, 16);
-    painter->drawText(titleRect, Qt::AlignHCenter | Qt::AlignVCenter,
+    painter->setPen(Theme::textPrimary());
+    const QRect titleRect(textArea.left() + 8, textArea.top() + 4, textArea.width() - 16, 17);
+    painter->drawText(titleRect, Qt::AlignLeft | Qt::AlignVCenter,
                       painter->fontMetrics().elidedText(title, Qt::ElideRight, titleRect.width()));
 
     QFont systemFont = option.font;
     systemFont.setPixelSize(qMax(8, 9 * m_cardWidth / 176));
     painter->setFont(systemFont);
-    painter->setPen(palette.mid().color());
-    painter->drawText(QRect(bottomBar.left() + 8, bottomBar.top() + 17, bottomBar.width() - 16, 15), Qt::AlignHCenter | Qt::AlignVCenter, system);
+    painter->setPen(Theme::textSecondary());
+    painter->drawText(QRect(textArea.left() + 8, textArea.top() + 21, textArea.width() - 16, 15), Qt::AlignLeft | Qt::AlignVCenter, system);
 
-    QColor border = palette.highlight().color();
+    QColor border = Theme::accent();
     if (selected) {
         painter->setPen(QPen(border, 2));
         painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(card, 10, 10);
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(border);
-        painter->drawRect(card.left(), card.bottom() - 2, card.width(), 3);
+        painter->drawRoundedRect(card, 8, 8);
     } else if (hovered) {
         border.setAlphaF(0.40);
         painter->setPen(QPen(border, 1));
         painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(card, 10, 10);
+        painter->drawRoundedRect(card, 8, 8);
     }
     painter->restore();
 }

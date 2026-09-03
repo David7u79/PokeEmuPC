@@ -7,6 +7,8 @@ add_executable(PocketPartner
     include/ArtworkIndex.hpp
     include/ArtworkPickerDialog.hpp
     include/GameCardDelegate.hpp
+    include/LibrarySidebar.hpp
+    include/EmptyStateWidget.hpp
     include/SettingsWidget.hpp
     include/CoresWidget.hpp
     include/EmulatorWidget.hpp
@@ -29,6 +31,8 @@ add_executable(PocketPartner
     src/ArtworkIndex.cpp
     src/ArtworkPickerDialog.cpp
     src/GameCardDelegate.cpp
+    src/LibrarySidebar.cpp
+    src/EmptyStateWidget.cpp
     src/SettingsWidget.cpp
     src/CoresWidget.cpp
     src/EmulatorWidget.cpp

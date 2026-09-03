@@ -4,7 +4,6 @@
 #include <QComboBox>
 #include <QLineEdit>
 #include <QListView>
-#include <QListWidget>
 #include <QPushButton>
 #include <QSlider>
 #include <QSortFilterProxyModel>
@@ -19,6 +18,8 @@ namespace Pocket::App {
 
 class GameArtworkLoader;
 class GameCardDelegate;
+class LibrarySidebar;
+class EmptyStateWidget;
 
 class LibraryWidget : public QWidget {
     Q_OBJECT
@@ -54,8 +55,8 @@ private:
     QStandardItemModel* m_model{nullptr};
     QSortFilterProxyModel* m_proxy{nullptr};
     QListView* m_grid{nullptr};
-    QListWidget* m_categories{nullptr};
-    QLabel* m_emptyLabel{nullptr};
+    LibrarySidebar* m_categories{nullptr};
+    EmptyStateWidget* m_emptyState{nullptr};
     QLabel* m_statusLabel{nullptr};
     QLabel* m_detailCover{nullptr};
     QLabel* m_detailTitle{nullptr};

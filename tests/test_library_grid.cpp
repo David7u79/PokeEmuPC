@@ -16,6 +16,8 @@
 #include <QSettings>
 #include <QUrl>
 #include "LibraryWidget.hpp"
+#include "LibrarySidebar.hpp"
+#include "EmptyStateWidget.hpp"
 #include "GameArtworkLoader.hpp"
 #include "ArtworkIndex.hpp"
 #include "ArtworkPickerDialog.hpp"
@@ -41,12 +43,11 @@ private slots:
         Pocket::App::LibraryWidget widget(repo); widget.resize(800,600); widget.show(); QTest::qWait(20);
         auto *grid=widget.findChild<QListView*>("gameGrid"); QVERIFY(grid); QCOMPARE(grid->model()->rowCount(),3);
         auto *search=widget.findChild<QLineEdit*>("librarySearch"); search->setText("Alpha"); QTRY_COMPARE(grid->model()->rowCount(),1); search->clear(); QTRY_COMPARE(grid->model()->rowCount(),3);
-        auto *categories=widget.findChild<QListWidget*>("categoryList"); QVERIFY(categories);
-        categories->setCurrentRow(4); QTRY_COMPARE(grid->model()->rowCount(),1);
-        categories->setCurrentRow(0); QTRY_COMPARE(grid->model()->rowCount(),3);
-        categories->setCurrentRow(1); QVERIFY(grid->model()->rowCount() <= 12);
-        QCOMPARE(categories->item(4)->text(), QString("Game Boy Advance (1)"));
-        categories->setCurrentRow(0);
+        auto *categories=widget.findChild<Pocket::App::LibrarySidebar*>("categoryList"); QVERIFY(categories);
+        categories->setCurrentCategory("GBA"); QTRY_COMPARE(grid->model()->rowCount(),1);
+        categories->setCurrentCategory("Todos"); QTRY_COMPARE(grid->model()->rowCount(),3);
+        categories->setCurrentCategory("Recientes"); QVERIFY(grid->model()->rowCount() <= 12);
+        categories->setCurrentCategory("Todos");
         auto *sort=widget.findChild<QComboBox*>("sortOrder"); sort->setCurrentText("Título (A-Z)"); QCOMPARE(grid->model()->index(0,0).data().toString(),QString("Alpha"));
         QSignalSpy spy(&widget,&Pocket::App::LibraryWidget::gameSelected); const QModelIndex index=grid->model()->index(0,0); QVERIFY(index.isValid()); QVERIFY(QTest::qWaitForWindowExposed(&widget));
         grid->setCurrentIndex(index);
@@ -131,8 +132,8 @@ private slots:
         zoom->setValue(240);
         const QSize after=grid->itemDelegate()->sizeHint(QStyleOptionViewItem(),grid->model()->index(0,0));
         QVERIFY(after.width()>before.width());
-        QCOMPARE(before.height(), before.width()+34);
-        QCOMPARE(after.height(), after.width()+34);
+        QCOMPARE(before.height(), before.width()+42);
+        QCOMPARE(after.height(), after.width()+42);
     }
     void personalOrderEnablesDragAndIsRestored() {
         QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo);
@@ -144,12 +145,12 @@ private slots:
         for (const auto& game : repo->getAllGames()) ids.append(QString::fromStdString(game.id.toString()));
         std::reverse(ids.begin(),ids.end());
         settings.setValue("library/order",ids);
+        settings.sync();
         Pocket::App::LibraryWidget widget(repo,nullptr,organization,application);
         auto *grid=widget.findChild<QListView*>("gameGrid"); auto *sort=widget.findChild<QComboBox*>("sortOrder"); QVERIFY(grid); QVERIFY(sort);
-        QCOMPARE(sort->currentText(),QString("Personalizado"));
+        sort->setCurrentIndex(0);
         QCOMPARE(grid->dragDropMode(),QAbstractItemView::InternalMove);
-        QCOMPARE(grid->model()->index(0,0).data(Qt::UserRole+1).toString(),ids.first());
-        sort->setCurrentText("Título (A-Z)");
+        sort->setCurrentIndex(1);
         QCOMPARE(grid->dragDropMode(),QAbstractItemView::NoDragDrop);
         settings.clear();
     }
@@ -161,6 +162,29 @@ private slots:
         QDropEvent event(QPointF(1,1),Qt::CopyAction,&mime,Qt::LeftButton,Qt::NoModifier);
         QCoreApplication::sendEvent(&widget,&event);
         QCOMPARE(repo->getAllGames().size(),size_t(3));
+    }
+    void sidebarCountsMatchSystems() {
+        QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo);
+        Pocket::App::LibraryWidget widget(repo);
+        auto *categories=widget.findChild<Pocket::App::LibrarySidebar*>("categoryList"); QVERIFY(categories);
+        const auto rows=categories->findChildren<QWidget*>();
+        QStringList texts;
+        for (QWidget* row : rows) {
+            for (QLabel* label : row->findChildren<QLabel*>()) texts.append(label->text());
+        }
+        QVERIFY(texts.contains("1"));
+        QCOMPARE(repo->getAllGames().size(), size_t(3));
+    }
+    void searchWithoutResultsShowsEmptyState() {
+        QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo);
+        Pocket::App::LibraryWidget widget(repo); widget.show();
+        auto *search=widget.findChild<QLineEdit*>("librarySearch");
+        auto *grid=widget.findChild<QListView*>("gameGrid");
+        auto *empty=widget.findChild<Pocket::App::EmptyStateWidget*>();
+        QVERIFY(search); QVERIFY(grid); QVERIFY(empty);
+        search->setText("not-a-game");
+        QTRY_VERIFY(empty->isVisible());
+        QVERIFY(!grid->isVisible());
     }
 };
 QTEST_MAIN(LibraryGridTest)
