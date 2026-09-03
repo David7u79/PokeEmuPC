@@ -42,10 +42,16 @@ public:
     // Which emulator button a key drives, or nothing when it is unbound.
     std::optional<Pocket::Emulator::EmulatorButton> buttonForKey(int key) const;
 
+signals:
+    void mappingEdited();
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void leaveEvent(QEvent* event) override;
 
 private slots:
     void onFrameReady();
@@ -60,11 +66,21 @@ private:
     std::shared_ptr<Pocket::Input::ControllerMapping> m_mapping;
     QString m_controllerSystem{"GBA"};
     QHash<int, Pocket::Emulator::EmulatorButton> m_keyBindings;
+    QHash<int, QString> m_keyControlIds;
     ControllerHintOverlay m_hintOverlay;
     bool m_hintsVisible{true};
     EmulatorViewMode m_viewMode{EmulatorViewMode::ConsoleFrame};
+    QString m_mousePressedControlId;
+    QString m_capturingControlId;
+    QTimer m_captureBlinkTimer;
+    bool m_captureBlinkOn{true};
 
     AudioSink m_audioSink;
+
+    void releaseMouseControl();
+    void saveMapping();
+    void beginCapture(const QString& controlId);
+    void applyCapturedBinding(int key);
 };
 
 } // namespace Pocket::App
