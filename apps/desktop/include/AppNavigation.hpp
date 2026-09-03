@@ -24,12 +24,18 @@ public:
     QPushButton* libraryButton() const { return m_libraryButton; }
     QPushButton* companionButton() const { return m_companionButton; }
     QPushButton* settingsButton() const { return m_settingsButton; }
+    QPushButton* resumeButton() const { return m_resumeButton; }
 
 public slots:
     void setActiveSection(Section section);
+    // Shown only while a game is loaded: leaving the emulator is one click, and so
+    // is coming back to it.
+    void setRunningGame(const QString& title);
+    void clearRunningGame();
 
 signals:
     void sectionSelected(Section section);
+    void resumeRequested();
 
 private:
     void updateButtonStates();
@@ -39,6 +45,7 @@ private:
     QPushButton* m_libraryButton{nullptr};
     QPushButton* m_companionButton{nullptr};
     QPushButton* m_settingsButton{nullptr};
+    QPushButton* m_resumeButton{nullptr};
 };
 
 } // namespace Pocket::App

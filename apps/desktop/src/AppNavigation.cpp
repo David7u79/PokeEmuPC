@@ -38,6 +38,13 @@ AppNavigation::AppNavigation(QWidget* parent)
     // Spacing between navigation tabs and right actions
     layout->addStretch();
 
+    // Back into the running game. Hidden until there is one.
+    m_resumeButton = new QPushButton(this);
+    m_resumeButton->setObjectName("navResume");
+    m_resumeButton->setFocusPolicy(Qt::StrongFocus);
+    m_resumeButton->setVisible(false);
+    layout->addWidget(m_resumeButton);
+
     // Settings button on the right
     m_settingsButton = new QPushButton(QString::fromUtf8("⚙ Settings"), this);
     m_settingsButton->setObjectName("navSettings");
@@ -60,7 +67,24 @@ AppNavigation::AppNavigation(QWidget* parent)
         emit sectionSelected(Section::Settings);
     });
 
+    connect(m_resumeButton, &QPushButton::clicked, this, &AppNavigation::resumeRequested);
+
     updateButtonStates();
+}
+
+void AppNavigation::setRunningGame(const QString& title)
+{
+    const QString shown = title.size() > 28 ? title.left(27) + QChar(0x2026) : title;
+    m_resumeButton->setText(QString::fromUtf8("▶ %1").arg(shown));
+    m_resumeButton->setToolTip(QStringLiteral("Volver a %1").arg(title));
+    m_resumeButton->setVisible(true);
+}
+
+void AppNavigation::clearRunningGame()
+{
+    m_resumeButton->setVisible(false);
+    m_resumeButton->setText({});
+    m_resumeButton->setToolTip({});
 }
 
 AppNavigation::Section AppNavigation::activeSection() const

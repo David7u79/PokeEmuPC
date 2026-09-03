@@ -139,6 +139,11 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
     m_stackedWidget->setCurrentWidget(m_libraryWidget);
     m_navigation->setActiveSection(AppNavigation::Section::Library);
 
+    connect(m_navigation, &AppNavigation::resumeRequested, this, [this] {
+        m_stackedWidget->setCurrentWidget(m_emulatorPage);
+        m_emulatorStack->currentWidget()->setFocus();
+    });
+
     connect(m_navigation, &AppNavigation::sectionSelected, this, [this](AppNavigation::Section section) {
         switch (section) {
         case AppNavigation::Section::Library:
@@ -219,6 +224,12 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
         } else {
             m_emulatorWidget->setStatusMessage("system not supported by the internal core");
         }
+        // Leaving the emulator was one click and coming back was none: the running
+        // game gets a way back in the navigation bar for as long as it is loaded.
+        if (activeEngine())
+            m_navigation->setRunningGame(QString::fromStdString(game.title));
+        else
+            m_navigation->clearRunningGame();
         updateEmulatorControls();
     });
 
