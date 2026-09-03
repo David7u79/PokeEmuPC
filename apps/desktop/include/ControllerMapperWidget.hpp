@@ -62,6 +62,7 @@ private:
     QSet<QString> m_conflictIds;
     QVBoxLayout* m_header{};
     QHBoxLayout* m_content{};
+    QWidget* m_canvas{};
     QComboBox* m_systemSelector{};
     QComboBox* m_scopeSelector{};
     QPushButton* m_keyboardPreset{};

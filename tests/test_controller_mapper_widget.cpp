@@ -31,8 +31,12 @@ void ControllerMapperWidgetTest::resizeAndHitTesting()
     QVERIFY(artScale > 1.0);
     QCOMPARE(second.width() / first.width(), artScale);
     QCOMPARE(second.height() / first.height(), artSecond.height() / artFirst.height());
-    // Centred horizontally in the left canvas, and clear of the toolbar row above.
-    QCOMPARE(artSecond.center().x(), widget.artworkRect().center().x());
+    // Centred horizontally in the canvas left of the bindings panel, and clear of
+    // the toolbar row above. Comparing against artworkRect() itself would assert
+    // nothing: that is the value under test.
+    const QRect panel = widget.findChild<QTableWidget*>("controlsTable")->parentWidget()->geometry();
+    QVERIFY(artSecond.right() < panel.left());
+    QVERIFY(qAbs(artSecond.center().x() - panel.left() / 2.0) < 12.0);
     QVERIFY(artSecond.top() > 0.0);
     QVERIFY(artSecond.bottom() <= 600.0);
     QTest::mouseClick(&widget, Qt::LeftButton, Qt::NoModifier, second.center().toPoint()); QCOMPARE(widget.selectedControlId(), QString("A"));

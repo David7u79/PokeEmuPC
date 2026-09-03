@@ -49,7 +49,12 @@ ControllerMapperWidget::ControllerMapperWidget(std::shared_ptr<ControllerMapping
     header->addLayout(firstRow); header->addLayout(secondRow);
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(8, 8, 8, 8); layout->setSpacing(6); layout->addLayout(header);
     m_content = new QHBoxLayout; m_content->setContentsMargins(0, 0, 0, 0); m_content->setSpacing(6);
-    m_content->addStretch(3);
+    // An empty widget rather than a stretch: the artwork is painted on this widget,
+    // and a real child is what gives the layout a geometry to read back.
+    m_canvas = new QWidget(this);
+    m_canvas->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_canvas->setAttribute(Qt::WA_NoSystemBackground);
+    m_content->addWidget(m_canvas, 3);
     auto* panel = new QWidget(this); panel->setFixedWidth(320); auto* panelLayout = new QVBoxLayout(panel); panelLayout->setContentsMargins(0, 0, 0, 0); panelLayout->setSpacing(6);
     auto* title = new QLabel("Controles", panel); QFont titleFont = title->font(); titleFont.setBold(true); title->setFont(titleFont); panelLayout->addWidget(title);
     m_captureBanner = new QLabel(panel); m_captureBanner->setStyleSheet("QLabel { background: #fff3cd; padding: 4px; }"); m_captureBanner->setVisible(false); panelLayout->addWidget(m_captureBanner);
@@ -83,9 +88,9 @@ void ControllerMapperWidget::setSystem(const QString& system)
 
 QRect ControllerMapperWidget::canvasRect() const
 {
-    // Everything below the toolbar row. Using the full widget rect would slide the
-    // controller under the buttons and hide the capture prompt behind them.
-    return m_content && m_content->count() ? m_content->itemAt(0)->geometry() : QRect();
+    // The area left of the bindings panel and below the toolbar rows: using the full
+    // widget rect would slide the controller under both of them.
+    return m_canvas ? m_canvas->geometry() : QRect();
 }
 QRectF ControllerMapperWidget::targetRect() const { const QRect canvas = canvasRect(); return m_artwork.targetRect(canvas.size()).translated(canvas.topLeft()); }
 QRectF ControllerMapperWidget::artworkRect() const { return targetRect(); }
