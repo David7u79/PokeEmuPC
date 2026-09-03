@@ -11,6 +11,10 @@
 #include <QFile>
 #include <QImage>
 #include <QBuffer>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QSettings>
+#include <QUrl>
 #include "LibraryWidget.hpp"
 #include "GameArtworkLoader.hpp"
 #include "ArtworkIndex.hpp"
@@ -127,6 +131,36 @@ private slots:
         zoom->setValue(240);
         const QSize after=grid->itemDelegate()->sizeHint(QStyleOptionViewItem(),grid->model()->index(0,0));
         QVERIFY(after.width()>before.width());
+        QCOMPARE(before.height(), before.width()*4/3+34);
+        QCOMPARE(after.height(), after.width()*4/3+34);
+    }
+    void personalOrderEnablesDragAndIsRestored() {
+        QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo);
+        const QString organization="LibraryGridTest";
+        const QString application="personalOrder";
+        QSettings settings(organization,application);
+        settings.clear();
+        QStringList ids;
+        for (const auto& game : repo->getAllGames()) ids.append(QString::fromStdString(game.id.toString()));
+        std::reverse(ids.begin(),ids.end());
+        settings.setValue("library/order",ids);
+        Pocket::App::LibraryWidget widget(repo,nullptr,organization,application);
+        auto *grid=widget.findChild<QListView*>("gameGrid"); auto *sort=widget.findChild<QComboBox*>("sortOrder"); QVERIFY(grid); QVERIFY(sort);
+        QCOMPARE(sort->currentText(),QString("Personalizado"));
+        QCOMPARE(grid->dragDropMode(),QAbstractItemView::InternalMove);
+        QCOMPARE(grid->model()->index(0,0).data(Qt::UserRole+1).toString(),ids.first());
+        sort->setCurrentText("Título (A-Z)");
+        QCOMPARE(grid->dragDropMode(),QAbstractItemView::NoDragDrop);
+        settings.clear();
+    }
+    void externalDropOfMissingRomDoesNotImport() {
+        QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo);
+        Pocket::App::LibraryWidget widget(repo);
+        QMimeData mime;
+        mime.setUrls({QUrl::fromLocalFile(roms.filePath("missing.gba"))});
+        QDropEvent event(QPointF(1,1),Qt::CopyAction,&mime,Qt::LeftButton,Qt::NoModifier);
+        QCoreApplication::sendEvent(&widget,&event);
+        QCOMPARE(repo->getAllGames().size(),size_t(3));
     }
 };
 QTEST_MAIN(LibraryGridTest)

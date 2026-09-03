@@ -24,7 +24,9 @@ class LibraryWidget : public QWidget {
     Q_OBJECT
 
 public:
-    explicit LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWidget* parent = nullptr);
+    explicit LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWidget* parent = nullptr,
+                           QString settingsOrganization = "PocketPartnerProject",
+                           QString settingsApplication = "PocketPartner");
 
     void refreshLibrary();
 
@@ -38,10 +40,14 @@ private slots:
     void removeSelectedGame();
 
 private:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
     void updateEmptyState();
     void updateStatus();
     void updateCategoryCounts();
     void applyFilters();
+    void importGames(const QStringList& filePaths);
+    void savePersonalOrder();
     std::optional<Core::Game> gameForIndex(const QModelIndex& index) const;
 
     std::shared_ptr<Storage::GameRepository> m_repo;
@@ -65,6 +71,8 @@ private:
     QSlider* m_cardZoom{nullptr};
     GameCardDelegate* m_delegate{nullptr};
     GameArtworkLoader* m_artworkLoader{nullptr};
+    QString m_settingsOrganization;
+    QString m_settingsApplication;
 };
 
 } // namespace Pocket::App
