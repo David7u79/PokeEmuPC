@@ -243,6 +243,8 @@ add_executable(test_cores_widget
 )
 add_executable(test_library_grid
     test_library_grid.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/Theme.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/Theme.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibraryWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibraryWidget.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameArtworkLoader.hpp
@@ -253,6 +255,10 @@ add_executable(test_library_grid
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/ArtworkPickerDialog.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameCardDelegate.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameCardDelegate.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibrarySidebar.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibrarySidebar.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/EmptyStateWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/EmptyStateWidget.cpp
 )
 target_include_directories(test_library_grid PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
 target_link_libraries(test_library_grid PRIVATE Qt6::Core Qt6::Gui Qt6::Test Qt6::Widgets Qt6::Network pocket_core pocket_storage)
@@ -318,6 +324,10 @@ add_executable(test_app_navigation
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/ArtworkPickerDialog.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameCardDelegate.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameCardDelegate.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibrarySidebar.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibrarySidebar.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/EmptyStateWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/EmptyStateWidget.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/SettingsWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/SettingsWidget.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/CoresWidget.hpp

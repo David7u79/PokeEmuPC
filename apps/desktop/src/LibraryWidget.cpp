@@ -3,6 +3,9 @@
 #include "GameArtworkLoader.hpp"
 #include "GameCardDelegate.hpp"
 #include "ArtworkPickerDialog.hpp"
+#include "EmptyStateWidget.hpp"
+#include "LibrarySidebar.hpp"
+#include "Theme.hpp"
 
 #include <QComboBox>
 #include <QDateTime>
@@ -16,6 +19,7 @@
 #include <QMimeData>
 #include <QSettings>
 #include <QShortcut>
+#include <QStyle>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -37,10 +41,7 @@ enum GameRoles {
 
 QString systemForCategory(const QString& category)
 {
-    if (category == "Game Boy") return "GB";
-    if (category == "Game Boy Color") return "GBC";
-    if (category == "Game Boy Advance") return "GBA";
-    if (category == "Nintendo DS") return "NDS";
+    if (category == "GB" || category == "GBC" || category == "GBA" || category == "NDS") return category;
     return {};
 }
 
@@ -111,27 +112,41 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     mainLayout->setContentsMargins(12, 12, 12, 12);
     mainLayout->setSpacing(10);
     auto* header = new QHBoxLayout;
-    auto* title = new QLabel("Biblioteca", this);
+    auto* title = new QLabel("My Games", this);
     QFont titleFont = title->font();
     titleFont.setBold(true);
     titleFont.setPointSize(titleFont.pointSize() + 2);
     title->setFont(titleFont);
+    m_statusLabel = new QLabel(this);
+    m_statusLabel->setObjectName("libraryStatus");
+    m_statusLabel->setStyleSheet(QString("color: %1;").arg(Theme::textSecondary().name()));
     m_search = new QLineEdit(this);
     m_search->setObjectName("librarySearch");
     m_search->setPlaceholderText("Buscar…");
     m_search->setClearButtonEnabled(true);
+    m_search->addAction(style()->standardIcon(QStyle::SP_FileDialogContentsView), QLineEdit::LeadingPosition);
     m_sortOrder = new QComboBox(this);
     m_sortOrder->setObjectName("sortOrder");
     m_sortOrder->addItems({"Personalizado", "Título (A-Z)", "Añadido recientemente"});
     if (QSettings(m_settingsOrganization, m_settingsApplication).value("library/order").toStringList().isEmpty()) {
         m_sortOrder->setCurrentIndex(1);
     }
-    m_addButton = new QPushButton("Añadir juego", this);
+    m_addButton = new QPushButton("+ Añadir juego", this);
     m_addButton->setObjectName("addGameButton");
+    m_addButton->setStyleSheet(QString("QPushButton#addGameButton { background: %1; color: %2; border-color: %1; }"
+                                        "QPushButton#addGameButton:hover { background: %3; border-color: %3; }")
+                                    .arg(Theme::accent().name(), Theme::surface().name(), Theme::accentPressed().name()));
     header->addWidget(title);
+    header->addWidget(m_statusLabel);
+    header->addStretch();
     header->addWidget(m_search);
     header->addWidget(m_sortOrder);
-    header->addStretch();
+    m_cardZoom = new QSlider(Qt::Horizontal, this);
+    m_cardZoom->setObjectName("cardZoom");
+    m_cardZoom->setRange(120, 240);
+    m_cardZoom->setValue(QSettings(m_settingsOrganization, m_settingsApplication).value("library/cardWidth", 176).toInt());
+    m_cardZoom->setFixedWidth(100);
+    header->addWidget(m_cardZoom);
     header->addWidget(m_addButton);
     mainLayout->addLayout(header);
 
@@ -144,17 +159,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
 
     auto* content = new QHBoxLayout;
     content->setSpacing(10);
-    m_categories = new QListWidget(this);
-    m_categories->setObjectName("categoryList");
-    m_categories->setFixedWidth(150);
-    m_categories->setFrameShape(QFrame::NoFrame);
-    m_categories->setSelectionMode(QAbstractItemView::SingleSelection);
-    for (const QString& category : {"Todos", "Recientes", "Game Boy", "Game Boy Color", "Game Boy Advance", "Nintendo DS"}) {
-        auto* item = new QListWidgetItem(category, m_categories);
-        item->setData(Qt::UserRole, category);
-        item->setSizeHint(QSize(item->sizeHint().width(), 28));
-    }
-    m_categories->setCurrentRow(0);
+    m_categories = new LibrarySidebar(this);
     content->addWidget(m_categories);
 
     auto* center = new QVBoxLayout;
@@ -176,9 +181,8 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     m_delegate = new GameCardDelegate(m_grid);
     m_grid->setItemDelegate(m_delegate);
     center->addWidget(m_grid);
-    m_emptyLabel = new QLabel("Todavía no hay juegos. Pulsa «Añadir juego».", this);
-    m_emptyLabel->setAlignment(Qt::AlignCenter);
-    center->addWidget(m_emptyLabel);
+    m_emptyState = new EmptyStateWidget(this);
+    center->addWidget(m_emptyState);
     content->addLayout(center, 1);
 
     auto* detail = new QWidget(this);
@@ -216,28 +220,22 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     content->addWidget(detail);
     mainLayout->addLayout(content, 1);
 
-    auto* footer = new QHBoxLayout;
-    footer->setSpacing(10);
-    m_statusLabel = new QLabel(this);
-    m_statusLabel->setObjectName("libraryStatus");
-    m_cardZoom = new QSlider(Qt::Horizontal, this);
-    m_cardZoom->setObjectName("cardZoom");
-    m_cardZoom->setRange(120, 240);
-    m_cardZoom->setValue(QSettings(m_settingsOrganization, m_settingsApplication).value("library/cardWidth", 176).toInt());
-    footer->addWidget(m_statusLabel);
-    footer->addStretch();
-    footer->addWidget(new QLabel("Zoom", this));
-    footer->addWidget(m_cardZoom);
-    mainLayout->addLayout(footer);
-
     m_artworkLoader = new GameArtworkLoader(this);
     setAcceptDrops(true);
     connect(m_addButton, &QPushButton::clicked, this, &LibraryWidget::onAddGameClicked);
     connect(m_search, &QLineEdit::textChanged, this, [this](const QString& text) {
         m_proxy->setFilterFixedString(text);
         updateStatus();
+        updateEmptyState();
     });
-    connect(m_categories, &QListWidget::currentTextChanged, this, [this] { applyFilters(); });
+    connect(m_categories, &LibrarySidebar::categoryChanged, this, [this] { applyFilters(); });
+    connect(m_emptyState, &EmptyStateWidget::actionRequested, this, [this] {
+        if (m_model->rowCount() == 0) {
+            onAddGameClicked();
+        } else {
+            m_search->clear();
+        }
+    });
     connect(m_sortOrder, &QComboBox::currentIndexChanged, this, [this] { applyFilters(); });
     connect(m_grid, &QListView::activated, this, &LibraryWidget::playGame);
     connect(m_grid, &QListView::doubleClicked, this, &LibraryWidget::playGame);
@@ -280,7 +278,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
 void LibraryWidget::applyFilters()
 {
     auto* proxy = static_cast<GameProxyModel*>(m_proxy);
-    proxy->category = m_categories->currentItem() ? m_categories->currentItem()->data(Qt::UserRole).toString() : "Todos";
+    proxy->category = m_categories->currentCategory();
     proxy->sortMode = m_sortOrder->currentIndex() == 0 ? GameProxyModel::SortMode::Personal
         : m_sortOrder->currentIndex() == 2 ? GameProxyModel::SortMode::Recent
                                            : GameProxyModel::SortMode::Title;
@@ -292,34 +290,42 @@ void LibraryWidget::applyFilters()
     m_grid->setDragEnabled(personal);
     m_grid->setAcceptDrops(personal);
     updateStatus();
+    updateEmptyState();
 }
 
 void LibraryWidget::updateEmptyState()
 {
-    const bool empty = m_model->rowCount() == 0;
-    m_emptyLabel->setVisible(empty);
-    m_grid->setVisible(!empty);
+    const bool libraryEmpty = m_model->rowCount() == 0;
+    const bool noResults = !libraryEmpty && m_proxy->rowCount() == 0;
+    m_grid->setVisible(!libraryEmpty && !noResults);
+    m_emptyState->setVisible(libraryEmpty || noResults);
+    if (libraryEmpty) {
+        m_emptyState->setState("Tu biblioteca está vacía", "Añade una ROM de Pokémon para empezar tu colección.", "+ Añadir juego");
+    } else if (noResults) {
+        m_emptyState->setState(QString("Sin resultados para «%1»").arg(m_search->text()), "Prueba con otro nombre o cambia de categoría.", "Limpiar búsqueda");
+    }
 }
 
 void LibraryWidget::updateStatus()
 {
     const int total = m_model->rowCount();
     const int shown = m_proxy->rowCount();
-    m_statusLabel->setText(shown == total ? QString("%1 juegos").arg(total) : QString("%1 de %2 juegos").arg(shown).arg(total));
+    Q_UNUSED(shown);
+    m_statusLabel->setText(QString::number(total));
 }
 
 void LibraryWidget::updateCategoryCounts()
 {
-    for (int row = 0; row < m_categories->count(); ++row) {
-        QListWidgetItem* item = m_categories->item(row);
-        const QString category = item->data(Qt::UserRole).toString();
+    QHash<QString, int> counts;
+    for (const QString& category : {"Todos", "Recientes", "GB", "GBC", "GBA", "NDS"}) {
         int count = 0;
         for (int gameRow = 0; gameRow < m_model->rowCount(); ++gameRow) {
             if (category == "Todos" || category == "Recientes" || m_model->index(gameRow, 0).data(SystemRole).toString() == systemForCategory(category)) ++count;
         }
         if (category == "Recientes") count = qMin(count, 12);
-        item->setText(QString("%1 (%2)").arg(category).arg(count));
+        counts.insert(category, count);
     }
+    m_categories->setCounts(counts);
 }
 
 void LibraryWidget::refreshLibrary()
