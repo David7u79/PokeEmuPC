@@ -1,6 +1,8 @@
 #include <QtTest>
 #include <QMessageBox>
 #include <QTimer>
+#include <QTableWidget>
+#include <QPushButton>
 #include "ControllerMapperWidget.hpp"
 
 using namespace Pocket::App;
@@ -13,6 +15,7 @@ private slots:
     void capturesAndCancels();
     void duplicateAndNonBindable();
     void allSystemsLoad();
+    void tableSelectionAndActions();
 };
 
 void ControllerMapperWidgetTest::resizeAndHitTesting()
@@ -28,12 +31,23 @@ void ControllerMapperWidgetTest::resizeAndHitTesting()
     QVERIFY(artScale > 1.0);
     QCOMPARE(second.width() / first.width(), artScale);
     QCOMPARE(second.height() / first.height(), artSecond.height() / artFirst.height());
-    // Centred horizontally in the widget, and clear of the toolbar row above.
-    QCOMPARE(artSecond.center().x(), 400.0);
+    // Centred horizontally in the left canvas, and clear of the toolbar row above.
+    QCOMPARE(artSecond.center().x(), widget.artworkRect().center().x());
     QVERIFY(artSecond.top() > 0.0);
     QVERIFY(artSecond.bottom() <= 600.0);
     QTest::mouseClick(&widget, Qt::LeftButton, Qt::NoModifier, second.center().toPoint()); QCOMPARE(widget.selectedControlId(), QString("A"));
     QTest::mouseClick(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(1, 599)); QVERIFY(widget.selectedControlId().isEmpty());
+}
+
+void ControllerMapperWidgetTest::tableSelectionAndActions()
+{
+    auto mapping = std::make_shared<ControllerMapping>(); mapping->bind("GBA", "B", {InputDevice::Keyboard, Qt::Key_N});
+    ControllerMapperWidget widget(mapping); widget.resize(800, 600); widget.show(); QVERIFY(QTest::qWaitForWindowExposed(&widget));
+    auto* table = widget.findChild<QTableWidget*>("controlsTable"); QVERIFY(table);
+    int row = -1; for (int i = 0; i < table->rowCount(); ++i) if (table->item(i, 0)->text() == "B") { row = i; break; } QVERIFY(row >= 0);
+    table->selectRow(row); QCOMPARE(widget.selectedControlId(), QString("B"));
+    QTest::mouseClick(widget.findChild<QPushButton*>("changeKeyButton"), Qt::LeftButton); QCOMPARE(widget.capturingControlId(), QString("B"));
+    QTest::keyClick(&widget, Qt::Key_Escape); QTest::mouseClick(widget.findChild<QPushButton*>("removeBindingButton"), Qt::LeftButton); QVERIFY(!mapping->binding("GBA", "B"));
 }
 
 void ControllerMapperWidgetTest::capturesAndCancels()
