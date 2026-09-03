@@ -54,7 +54,8 @@ void InteractiveControlLayer::paint(QPainter& painter, const QRectF& target, con
         const QColor color = colorFor(state);
         const QRectF controlRect = rectFor(control, target);
         painter.setPen(QPen(color, 2.0));
-        QColor fill = color; fill.setAlpha(70);
+        QColor fill = color;
+        fill.setAlpha(state == ControlVisualState::NORMAL || state == ControlVisualState::MAPPED ? 40 : 70);
         painter.setBrush(fill);
         painter.drawRoundedRect(controlRect, 4, 4);
         const QString label = labels.value(control.id);
