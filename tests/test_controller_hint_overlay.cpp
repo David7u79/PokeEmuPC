@@ -245,8 +245,24 @@ private slots:
         widget.setFocus();
         QTest::keyPress(&widget, Qt::Key_A);
         const QImage pressed = widget.grab().toImage();
-        QVERIFY(before.pixelColor(aRect.center()) != pressed.pixelColor(aRect.center()));
-        QVERIFY(before.pixelColor(topRect.center()) == pressed.pixelColor(topRect.center()));
+        // Counted over the whole button, not sampled at its centre: the centre pixel
+        // is the artwork's own black "A" glyph, which darkening leaves black.
+        const auto differingPixels = [&before, &pressed](const QRect& area) {
+            int count = 0;
+            for (int y = area.top(); y <= area.bottom(); ++y)
+                for (int x = area.left(); x <= area.right(); ++x)
+                    if (before.pixelColor(x, y) != pressed.pixelColor(x, y))
+                        ++count;
+            return count;
+        };
+        // grab() renders at the screen's device pixel ratio, so the layout's logical
+        // rects have to be scaled before they index the image.
+        const qreal scale = before.width() / qreal(widget.width());
+        const auto scaled = [scale](const QRect& r) {
+            return QRectF(r.x() * scale, r.y() * scale, r.width() * scale, r.height() * scale).toAlignedRect();
+        };
+        QVERIFY(differingPixels(scaled(aRect)) > 0);
+        QCOMPARE(differingPixels(scaled(topRect)), 0);
         QTest::keyRelease(&widget, Qt::Key_A);
 
         QSignalSpy touchSpy(&widget, &Pocket::App::NdsDisplayWidget::touchInputChanged);

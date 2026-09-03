@@ -201,9 +201,11 @@ void ControllerHintOverlay::paintPressed(QPainter& painter, const QSize& widgetS
         const QRectF rect = controlRect(id, widgetSize);
         if (rect.isEmpty()) continue;
         const qreal radius = qMin(rect.width(), rect.height()) * .15;
-        // Light enough that the button underneath still reads as itself.
-        painter.setBrush(QColor(255, 255, 255, 38));
-        painter.setPen(QPen(m_captureControls.contains(id) ? QColor(255, 220, 0) : QColor(255, 255, 255, 96), 1));
+        // Darkening, not lightening: a white wash was invisible on the DS's white
+        // buttons, and a pressed button reads as pushed in anyway. Light enough that
+        // the button underneath still looks like itself.
+        painter.setBrush(QColor(0, 0, 0, 70));
+        painter.setPen(QPen(m_captureControls.contains(id) ? QColor(255, 220, 0) : QColor(255, 255, 255, 150), 2));
         painter.drawRoundedRect(rect, radius, radius);
     }
     painter.restore();
