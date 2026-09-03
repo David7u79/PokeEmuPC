@@ -299,3 +299,81 @@ if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
 endif()
 
 add_pocket_test(test_rom_fingerprint_streaming test_rom_fingerprint_streaming.cpp)
+
+add_executable(test_app_navigation
+    test_app_navigation.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/Theme.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/Theme.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/AppNavigation.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/AppNavigation.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/MainWindow.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/MainWindow.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibraryWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibraryWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameArtworkLoader.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameArtworkLoader.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/ArtworkIndex.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/ArtworkIndex.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/ArtworkPickerDialog.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/ArtworkPickerDialog.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameCardDelegate.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameCardDelegate.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/SettingsWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/SettingsWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/CoresWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/CoresWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/DiagnosticsWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/DiagnosticsWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/TrainingTimingBarWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/TrainingTimingBarWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/EmulatorWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/EmulatorWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/AudioSink.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/AudioSink.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/NdsDisplayWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/NdsDisplayWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/NdsDisplayTransform.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/NdsDisplayTransform.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/CompanionWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/CompanionWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/ControllerArtworkLayer.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/ControllerArtworkLayer.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/ControllerHintOverlay.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/ControllerHintOverlay.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/InteractiveControlLayer.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/InteractiveControlLayer.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/ControllerMapperWidget.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/ControllerMapperWidget.cpp
+)
+target_include_directories(test_app_navigation PRIVATE
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include
+    ${CMAKE_SOURCE_DIR}/src/core/include
+    ${CMAKE_SOURCE_DIR}/src/storage/include
+    ${CMAKE_SOURCE_DIR}/src/emulator/include
+    ${CMAKE_SOURCE_DIR}/src/save/include
+    ${CMAKE_SOURCE_DIR}/src/companion/include
+)
+target_link_libraries(test_app_navigation PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Sql
+    Qt6::Svg
+    Qt6::SvgWidgets
+    Qt6::Test
+    Qt6::Network
+    pocket_core
+    pocket_storage
+    pocket_emulator_api
+    pocket_save
+    pocket_companion_core
+    pocket_input
+)
+if(WIN32)
+    target_link_libraries(test_app_navigation PRIVATE dwmapi winmm)
+endif()
+add_test(NAME test_app_navigation COMMAND test_app_navigation)
+if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
+    set_tests_properties(test_app_navigation PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins;QT_QPA_PLATFORM=offscreen")
+endif()
+

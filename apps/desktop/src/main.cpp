@@ -4,6 +4,7 @@
 #include <QElapsedTimer>
 #include <QDebug>
 #include "MainWindow.hpp"
+#include "Theme.hpp"
 #include "pocketpartner/storage/DatabaseManager.hpp"
 #include "pocket/storage/SchemaMigration.hpp"
 #include "pocket/storage/GameRepository.hpp"
@@ -16,6 +17,9 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("PocketPartner");
     app.setOrganizationName("PocketPartnerProject");
+
+    // Apply dark theme before window initialization
+    Pocket::App::Theme::applyTheme(app);
 
     // Ensure AppData directory exists
     QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);

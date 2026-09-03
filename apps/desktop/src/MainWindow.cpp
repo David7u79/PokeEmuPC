@@ -21,7 +21,18 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
     setWindowTitle("PocketPartner - Desktop Companion & Emulator");
     resize(900, 600);
 
-    m_tabWidget = new QTabWidget(this);
+    auto* centralWidget = new QWidget(this);
+    auto* centralLayout = new QVBoxLayout(centralWidget);
+    centralLayout->setContentsMargins(0, 0, 0, 0);
+    centralLayout->setSpacing(0);
+
+    m_navigation = new AppNavigation(centralWidget);
+    m_stackedWidget = new QStackedWidget(centralWidget);
+    m_stackedWidget->setObjectName("mainPages");
+
+    centralLayout->addWidget(m_navigation);
+    centralLayout->addWidget(m_stackedWidget);
+    setCentralWidget(centralWidget);
 
     // One mapping shared by the configuration UI and the running emulator.
     m_controllerMapping = std::make_shared<Pocket::Input::ControllerMapping>();
@@ -32,8 +43,8 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
         }
     }
 
-    m_libraryWidget = new LibraryWidget(gameRepo, m_tabWidget);
-    m_emulatorPage = new QWidget(m_tabWidget);
+    m_libraryWidget = new LibraryWidget(gameRepo, m_stackedWidget);
+    m_emulatorPage = new QWidget(m_stackedWidget);
     auto* emulatorLayout = new QVBoxLayout(m_emulatorPage);
     // Every pixel the layout keeps is a pixel of black around the console.
     emulatorLayout->setContentsMargins(0, 0, 0, 0);
@@ -47,6 +58,14 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
     m_ndsDisplayWidget->setControllerMapping(m_controllerMapping);
     m_emulatorStack->addWidget(m_emulatorWidget);
     m_emulatorStack->addWidget(m_ndsDisplayWidget);
+
+    m_backToLibraryButton = new QPushButton(QString::fromUtf8("‹ Biblioteca"), m_emulatorPage);
+    m_backToLibraryButton->setObjectName("backToLibraryButton");
+    connect(m_backToLibraryButton, &QPushButton::clicked, this, [this] {
+        m_stackedWidget->setCurrentWidget(m_libraryWidget);
+        m_navigation->setActiveSection(AppNavigation::Section::Library);
+    });
+
     m_speedButton = new QToolButton(m_emulatorPage);
     m_speedButton->setText("x1");
     m_speedButton->setPopupMode(QToolButton::InstantPopup);
@@ -98,6 +117,9 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
     connect(m_muteButton, &QToolButton::clicked, this, [this] {
         m_volumeSlider->setValue(m_volumeSlider->value() == 0 ? m_lastVolume : 0);
     });
+
+    controlsLayout->addWidget(m_backToLibraryButton);
+    controlsLayout->addSpacing(8);
     controlsLayout->addWidget(m_speedButton);
     controlsLayout->addWidget(m_saveStateButton);
     controlsLayout->addStretch();
@@ -105,17 +127,32 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
     controlsLayout->addWidget(m_muteButton);
     emulatorLayout->addLayout(controlsLayout);
     emulatorLayout->addWidget(m_emulatorStack);
-    m_companionWidget = new CompanionWidget(m_tabWidget);
-    m_settingsWidget = new SettingsWidget(dbManager, m_controllerMapping, m_tabWidget);
-    m_diagnosticsWidget = new DiagnosticsWidget(m_tabWidget);
 
-    m_tabWidget->addTab(m_libraryWidget, "Library");
-    m_tabWidget->addTab(m_emulatorPage, "Emulator");
-    m_tabWidget->addTab(m_companionWidget, "Companion");
-    m_tabWidget->addTab(m_settingsWidget, "Settings");
-    m_tabWidget->addTab(m_diagnosticsWidget, "Diagnostics");
+    m_companionWidget = new CompanionWidget(m_stackedWidget);
+    m_settingsWidget = new SettingsWidget(dbManager, m_controllerMapping, m_stackedWidget);
 
-    setCentralWidget(m_tabWidget);
+    m_stackedWidget->addWidget(m_libraryWidget);
+    m_stackedWidget->addWidget(m_companionWidget);
+    m_stackedWidget->addWidget(m_settingsWidget);
+    m_stackedWidget->addWidget(m_emulatorPage);
+
+    m_stackedWidget->setCurrentWidget(m_libraryWidget);
+    m_navigation->setActiveSection(AppNavigation::Section::Library);
+
+    connect(m_navigation, &AppNavigation::sectionSelected, this, [this](AppNavigation::Section section) {
+        switch (section) {
+        case AppNavigation::Section::Library:
+            m_stackedWidget->setCurrentWidget(m_libraryWidget);
+            break;
+        case AppNavigation::Section::Companion:
+            m_stackedWidget->setCurrentWidget(m_companionWidget);
+            break;
+        case AppNavigation::Section::Settings:
+            m_stackedWidget->setCurrentWidget(m_settingsWidget);
+            break;
+        }
+    });
+
     m_emulatorWidget->audioSink().setVolume(m_volumeSlider->value() / 100.0f);
     m_ndsAudioSink.setVolume(m_volumeSlider->value() / 100.0f);
     m_autoSaveTimer.setInterval(60000);
@@ -137,7 +174,7 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             m_emulatorWidget->setControllerSystem(QString::fromStdString(Core::GameSystemUtils::toString(game.system)));
             m_emulatorWidget->loadAndStartRom(QString::fromStdString(game.romPath));
             m_emulatorStack->setCurrentWidget(m_emulatorWidget);
-            m_tabWidget->setCurrentWidget(m_emulatorPage);
+            m_stackedWidget->setCurrentWidget(m_emulatorPage);
             if (m_emulatorWidget->engine() && m_emulatorWidget->engine()->isRunning())
                 m_autoSaveTimer.start();
         } else if (game.system == Core::GameSystem::NDS) {
@@ -150,7 +187,7 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
                 m_emulatorWidget->setStatusMessage(QString::fromStdString(m_ndsEngine->coreError()));
                 m_ndsEngine.reset();
                 m_emulatorStack->setCurrentWidget(m_emulatorWidget);
-                m_tabWidget->setCurrentWidget(m_emulatorPage);
+                m_stackedWidget->setCurrentWidget(m_emulatorPage);
                 updateEmulatorControls();
                 return;
             }
@@ -158,7 +195,7 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
                 m_emulatorWidget->setStatusMessage("Failed to load Nintendo DS ROM");
                 m_ndsEngine.reset();
                 m_emulatorStack->setCurrentWidget(m_emulatorWidget);
-                m_tabWidget->setCurrentWidget(m_emulatorPage);
+                m_stackedWidget->setCurrentWidget(m_emulatorPage);
                 updateEmulatorControls();
                 return;
             }
@@ -177,7 +214,7 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             m_ndsEngine->start();
             m_emulatorStack->setCurrentWidget(m_ndsDisplayWidget);
             m_ndsDisplayWidget->setFocus();
-            m_tabWidget->setCurrentWidget(m_emulatorPage);
+            m_stackedWidget->setCurrentWidget(m_emulatorPage);
             m_autoSaveTimer.start();
         } else {
             m_emulatorWidget->setStatusMessage("system not supported by the internal core");

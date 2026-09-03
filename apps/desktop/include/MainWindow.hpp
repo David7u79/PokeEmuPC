@@ -1,10 +1,10 @@
 #pragma once
 
 #include <QMainWindow>
-#include <QTabWidget>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QToolButton>
+#include <QPushButton>
 #include <QSlider>
 #include <memory>
 #include "pocketpartner/storage/DatabaseManager.hpp"
@@ -12,10 +12,10 @@
 #include "LibraryWidget.hpp"
 #include "CompanionWidget.hpp"
 #include "SettingsWidget.hpp"
-#include "DiagnosticsWidget.hpp"
 #include "EmulatorWidget.hpp"
 #include "AudioSink.hpp"
 #include "NdsDisplayWidget.hpp"
+#include "AppNavigation.hpp"
 #include "pocket/emulator/MelonDsEngine.hpp"
 
 namespace Pocket::App {
@@ -25,6 +25,13 @@ class MainWindow : public QMainWindow {
 public:
     MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> dbManager,
                std::shared_ptr<Pocket::Storage::GameRepository> gameRepo, QWidget* parent = nullptr);
+
+    QStackedWidget* pages() const { return m_stackedWidget; }
+    AppNavigation* navigation() const { return m_navigation; }
+    LibraryWidget* libraryWidget() const { return m_libraryWidget; }
+    CompanionWidget* companionWidget() const { return m_companionWidget; }
+    SettingsWidget* settingsWidget() const { return m_settingsWidget; }
+    QWidget* emulatorPage() const { return m_emulatorPage; }
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -38,12 +45,13 @@ private:
     void loadActiveState(int slot);
     void updateEmulatorControls();
 
-    QTabWidget* m_tabWidget{nullptr};
+    AppNavigation* m_navigation{nullptr};
+    QStackedWidget* m_stackedWidget{nullptr};
     QWidget* m_emulatorPage{nullptr};
+    QPushButton* m_backToLibraryButton{nullptr};
     LibraryWidget* m_libraryWidget{nullptr};
     CompanionWidget* m_companionWidget{nullptr};
     SettingsWidget* m_settingsWidget{nullptr};
-    DiagnosticsWidget* m_diagnosticsWidget{nullptr};
     EmulatorWidget* m_emulatorWidget{nullptr};
     QStackedWidget* m_emulatorStack{nullptr};
     QToolButton* m_speedButton{nullptr};

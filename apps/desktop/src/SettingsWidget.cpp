@@ -1,4 +1,5 @@
 #include "SettingsWidget.hpp"
+#include "DiagnosticsWidget.hpp"
 #include "pocket/storage/SchemaMigration.hpp"
 #include <QComboBox>
 #include <QFormLayout>
@@ -53,11 +54,13 @@ SettingsWidget::SettingsWidget(std::shared_ptr<PocketPartner::Storage::DatabaseM
             emit coreLibraryPathChanged(path);
     });
     m_controllerMapper = new ControllerMapperWidget(std::move(mapping), this);
+    m_diagnosticsWidget = new DiagnosticsWidget(this);
 
     auto* tabs = new QTabWidget(this);
     tabs->addTab(generalPage, "General");
     tabs->addTab(m_coresWidget, "Cores");
     tabs->addTab(m_controllerMapper, "Controls");
+    tabs->addTab(m_diagnosticsWidget, "Diagnostics");
 
     auto* outerLayout = new QVBoxLayout(this);
     outerLayout->setContentsMargins(0, 0, 0, 0);

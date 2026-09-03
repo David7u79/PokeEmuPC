@@ -1,5 +1,7 @@
 add_executable(PocketPartner
     include/MainWindow.hpp
+    include/Theme.hpp
+    include/AppNavigation.hpp
     include/LibraryWidget.hpp
     include/GameArtworkLoader.hpp
     include/ArtworkIndex.hpp
@@ -20,6 +22,8 @@ add_executable(PocketPartner
     include/ControllerMapperWidget.hpp
     src/main.cpp
     src/MainWindow.cpp
+    src/Theme.cpp
+    src/AppNavigation.cpp
     src/LibraryWidget.cpp
     src/GameArtworkLoader.cpp
     src/ArtworkIndex.cpp
