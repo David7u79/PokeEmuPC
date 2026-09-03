@@ -120,7 +120,12 @@ void EmulatorWidget::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, false);
 
-    painter.fillRect(rect(), Qt::black);
+    // Letterboxing around a portrait console is unavoidable; flat black made the
+    // window look broken, a soft gradient reads as a frame.
+    QLinearGradient backdrop(rect().topLeft(), rect().bottomLeft());
+    backdrop.setColorAt(0.0, QColor(26, 27, 34));
+    backdrop.setColorAt(1.0, QColor(9, 9, 13));
+    painter.fillRect(rect(), backdrop);
     const bool framed = m_viewMode == EmulatorViewMode::ConsoleFrame && m_hintOverlay.isValid();
     const QRectF screen = framed ? m_hintOverlay.controlRect(QStringLiteral("SCREEN"), size()) : QRectF(rect());
     if (framed)
@@ -286,34 +291,23 @@ void EmulatorWidget::mousePressEvent(QMouseEvent* event)
     }
     const QRectF artwork = m_hintOverlay.artworkRect(size());
     const auto layout = Pocket::Input::ControllerLayout::forSystem(m_controllerSystem);
-    if (!layout || !artwork.contains(event->position())) {
-        QWidget::mousePressEvent(event);
-        return;
+    const Pocket::Input::ControllerControl* control = nullptr;
+    if (layout && artwork.contains(event->position())) {
+        const double x = (event->position().x() - artwork.left()) / artwork.width();
+        const double y = (event->position().y() - artwork.top()) / artwork.height();
+        control = layout->controlAt(x, y);
+        if (control && !control->isBindable())
+            control = nullptr;
     }
-    const double x = (event->position().x() - artwork.left()) / artwork.width();
-    const double y = (event->position().y() - artwork.top()) / artwork.height();
-    const auto* control = layout->controlAt(x, y);
-    if (!control || !control->isBindable()) {
-        QWidget::mousePressEvent(event);
-        return;
-    }
+    // The menu is also how the view itself is configured, so it opens on the chassis
+    // and on the screen, not only on a button.
     if (event->button() == Qt::RightButton) {
-        QMenu menu(this);
-        const QString name = controlDisplayName(control->id);
-        QAction* reassign = menu.addAction(QStringLiteral("Reasignar %1").arg(name));
-        QAction* clear = nullptr;
-        if (m_mapping && m_mapping->binding(m_controllerSystem, control->id))
-            clear = menu.addAction(QStringLiteral("Quitar asignación"));
-        QAction* selected = menu.exec(event->globalPosition().toPoint());
-        if (selected == reassign
-            && QMessageBox::question(this, QStringLiteral("Reasignar %1").arg(name),
-                                      QStringLiteral("¿Asignar una tecla nueva a %1?").arg(name)) == QMessageBox::Yes)
-            beginCapture(control->id);
-        else if (selected == clear && m_mapping) {
-            m_mapping->clear(m_controllerSystem, control->id);
-            saveMapping(); refreshKeyBindings(); emit mappingEdited(); update();
-        }
+        showControlMenu(control, event->globalPosition().toPoint());
         event->accept();
+        return;
+    }
+    if (!control) {
+        QWidget::mousePressEvent(event);
         return;
     }
     if (event->button() == Qt::LeftButton && m_engine) {
@@ -326,6 +320,56 @@ void EmulatorWidget::mousePressEvent(QMouseEvent* event)
         }
     }
     QWidget::mousePressEvent(event);
+}
+
+void EmulatorWidget::showControlMenu(const Pocket::Input::ControllerControl* control, const QPoint& globalPos)
+{
+    QMenu menu(this);
+    menu.setStyleSheet(QStringLiteral(
+        "QMenu{background:#20222b;color:#e7e9f2;border:1px solid #3b3f52;border-radius:8px;padding:6px;}"
+        "QMenu::item{padding:6px 26px 6px 14px;border-radius:5px;}"
+        "QMenu::item:selected{background:#3d4370;}"
+        "QMenu::item:disabled{color:#8d90a3;}"
+        "QMenu::separator{height:1px;background:#3b3f52;margin:5px 8px;}"));
+
+    QAction* reassign = nullptr;
+    QAction* clear = nullptr;
+    if (control) {
+        const QString name = controlDisplayName(control->id);
+        const auto binding = m_mapping ? m_mapping->binding(m_controllerSystem, control->id) : std::nullopt;
+        menu.addSection(binding ? QStringLiteral("%1  ·  %2").arg(name, binding->label()) : name);
+        reassign = menu.addAction(QStringLiteral("Asignar otra tecla…"));
+        clear = menu.addAction(QStringLiteral("Quitar asignación"));
+        clear->setEnabled(binding.has_value());
+        menu.addSeparator();
+    }
+
+    auto* consoleView = menu.addAction(QStringLiteral("Vista de consola"));
+    consoleView->setCheckable(true);
+    consoleView->setChecked(m_viewMode == EmulatorViewMode::ConsoleFrame);
+    consoleView->setShortcut(QKeySequence(Qt::Key_F2));
+    auto* showHints = menu.addAction(QStringLiteral("Mostrar teclas"));
+    showHints->setCheckable(true);
+    showHints->setChecked(m_hintsVisible);
+    showHints->setShortcut(QKeySequence(Qt::Key_F1));
+
+    const QAction* selected = menu.exec(globalPos);
+    if (selected == consoleView)
+        toggleViewMode();
+    else if (selected == showHints)
+        toggleHints();
+    else if (control && selected == reassign) {
+        const QString name = controlDisplayName(control->id);
+        if (QMessageBox::question(this, QStringLiteral("Reasignar %1").arg(name),
+                                  QStringLiteral("¿Asignar una tecla nueva a %1?").arg(name)) == QMessageBox::Yes)
+            beginCapture(control->id);
+    } else if (control && selected == clear && m_mapping) {
+        m_mapping->clear(m_controllerSystem, control->id);
+        saveMapping();
+        refreshKeyBindings();
+        emit mappingEdited();
+        update();
+    }
 }
 
 void EmulatorWidget::mouseReleaseEvent(QMouseEvent* event)

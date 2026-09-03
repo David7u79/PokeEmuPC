@@ -27,13 +27,15 @@ QRectF layoutControlRect(const Pocket::Input::ControllerControl& control, const 
 constexpr int kBadgePadding = 3;
 constexpr int kBadgeMinPixelSize = 7;
 
-// "D →": the key on the left, the console's own button on the right, so the badge
-// says both things a player needs without a second line to place.
-QString badgeText(const QString& id, const std::optional<Pocket::Input::InputBinding>& binding)
+// Only the key: which button it is, the artwork already says.
+QString badgeText(const std::optional<Pocket::Input::InputBinding>& binding)
 {
-    const QString key = binding ? displayLabel(*binding) : QString(QChar(0x2014));
-    const QString name = controlDisplayName(id);
-    return name == key ? key : key + QStringLiteral(" ") + name;
+    return binding ? displayLabel(*binding) : QString(QChar(0x2014));
+}
+
+bool isDPad(const QString& id)
+{
+    return id.startsWith(QLatin1String("DPAD_"));
 }
 
 // Largest size that fits the box, down to a floor below which the badge is drawn
@@ -54,14 +56,6 @@ QFont badgeFont(const QString& text, const QRectF& box)
     return font;
 }
 
-bool badgeFitsInside(const QString& text, const QRectF& button)
-{
-    const QFont font = badgeFont(text, button);
-    const QFontMetrics metrics(font);
-    return font.pixelSize() > kBadgeMinPixelSize
-           || (metrics.horizontalAdvance(text) + kBadgePadding * 2 <= button.width()
-               && metrics.height() <= button.height());
-}
 } // namespace
 
 QString controlDisplayName(const QString& id)
@@ -117,6 +111,26 @@ QRectF ControllerHintOverlay::controlRect(const QString& id, const QSize& widget
     return layoutControlRect(*control, artworkRect(widgetSize));
 }
 
+QFont ControllerHintOverlay::badgeFontFor(const QString& id, const QSize& widgetSize) const
+{
+    const auto fontFor = [this, &widgetSize](const Pocket::Input::ControllerControl& control) {
+        const auto binding = m_mapping ? m_mapping->binding(m_artwork.system(), control.id) : std::nullopt;
+        return badgeFont(badgeText(binding), layoutControlRect(control, artworkRect(widgetSize)));
+    };
+    const auto* control = m_layout ? m_layout->controlById(id) : nullptr;
+    if (!control)
+        return badgeFont(QString(), {});
+    QFont font = fontFor(*control);
+    // The four directions read as one control, so they share the smallest size any
+    // of them can hold: a bigger "W" over a smaller "S" looks like a mistake.
+    if (isDPad(id)) {
+        for (const auto& other : m_layout->controls())
+            if (isDPad(other.id))
+                font.setPixelSize(qMin(font.pixelSize(), fontFor(other).pixelSize()));
+    }
+    return font;
+}
+
 QRectF ControllerHintOverlay::labelRectFor(const QString& id, const QSize& widgetSize) const
 {
     if (!m_layout || !isValid())
@@ -128,14 +142,15 @@ QRectF ControllerHintOverlay::labelRectFor(const QString& id, const QSize& widge
     const QRectF target = artworkRect(widgetSize);
     const QRectF button = layoutControlRect(*it, target);
     const QRect bounds(QPoint(), widgetSize);
-    const QString text = badgeText(id, m_mapping ? m_mapping->binding(m_artwork.system(), id) : std::nullopt);
+    const QString text = badgeText(m_mapping ? m_mapping->binding(m_artwork.system(), id) : std::nullopt);
+    const QFontMetrics metrics{badgeFontFor(id, widgetSize)};
 
     // The badge belongs on the button it names; only a button too small to hold it
     // legibly pushes it outside.
-    if (badgeFitsInside(text, button))
+    if (metrics.horizontalAdvance(text) + kBadgePadding * 2 <= button.width()
+        && metrics.height() <= button.height())
         return button;
 
-    const QFontMetrics metrics{badgeFont(text, button)};
     const qreal width = metrics.horizontalAdvance(text) + kBadgePadding * 2;
     const qreal height = metrics.height() + kBadgePadding * 2;
     const int margin = 3;
@@ -186,8 +201,9 @@ void ControllerHintOverlay::paintPressed(QPainter& painter, const QSize& widgetS
         const QRectF rect = controlRect(id, widgetSize);
         if (rect.isEmpty()) continue;
         const qreal radius = qMin(rect.width(), rect.height()) * .15;
-        painter.setBrush(QColor(255, 255, 255, 77));
-        painter.setPen(QPen(m_captureControls.contains(id) ? QColor(255, 220, 0) : QColor(255, 255, 255, 179), 1));
+        // Light enough that the button underneath still reads as itself.
+        painter.setBrush(QColor(255, 255, 255, 38));
+        painter.setPen(QPen(m_captureControls.contains(id) ? QColor(255, 220, 0) : QColor(255, 255, 255, 96), 1));
         painter.drawRoundedRect(rect, radius, radius);
     }
     painter.restore();
@@ -229,7 +245,7 @@ void ControllerHintOverlay::paintKeyLabels(QPainter& painter, const QSize& widge
         if (!control.isBindable())
             continue;
 
-        const QString text = badgeText(control.id, m_mapping->binding(m_artwork.system(), control.id));
+        const QString text = badgeText(m_mapping->binding(m_artwork.system(), control.id));
         const QRectF button = layoutControlRect(control, target);
         const QRect labelRect = labelRectFor(control.id, widgetSize).toAlignedRect();
         if (labelRect.isEmpty())
@@ -249,7 +265,7 @@ void ControllerHintOverlay::paintKeyLabels(QPainter& painter, const QSize& widge
             usedLabelRects.push_back(labelRect);
         }
 
-        painter.setFont(badgeFont(text, labelRect));
+        painter.setFont(badgeFontFor(control.id, widgetSize));
         if (inside) {
             painter.setPen(QColor(0, 0, 0, 200));
             painter.drawText(labelRect.translated(1, 1), Qt::AlignCenter, text);

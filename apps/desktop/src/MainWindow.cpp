@@ -35,7 +35,11 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
     m_libraryWidget = new LibraryWidget(gameRepo, m_tabWidget);
     m_emulatorPage = new QWidget(m_tabWidget);
     auto* emulatorLayout = new QVBoxLayout(m_emulatorPage);
+    // Every pixel the layout keeps is a pixel of black around the console.
+    emulatorLayout->setContentsMargins(0, 0, 0, 0);
+    emulatorLayout->setSpacing(0);
     auto* controlsLayout = new QHBoxLayout;
+    controlsLayout->setContentsMargins(6, 3, 6, 3);
     m_emulatorStack = new QStackedWidget(m_emulatorPage);
     m_emulatorWidget = new EmulatorWidget(m_emulatorStack);
     m_emulatorWidget->setControllerMapping(m_controllerMapping);

@@ -4,6 +4,7 @@
 
 #include "pocket/input/ControllerLayout.hpp"
 
+#include <QFont>
 #include <QSize>
 #include <QPixmap>
 #include <QSet>
@@ -42,6 +43,8 @@ public:
     QSize preferredSize(const QSize& available) const;
 
 private:
+    QFont badgeFontFor(const QString& id, const QSize& widgetSize) const;
+
     ControllerArtworkLayer m_artwork;
     std::optional<Pocket::Input::ControllerLayout> m_layout;
     std::shared_ptr<Pocket::Input::ControllerMapping> m_mapping;

@@ -77,6 +77,7 @@ private:
 
     AudioSink m_audioSink;
 
+    void showControlMenu(const Pocket::Input::ControllerControl* control, const QPoint& globalPos);
     void releaseMouseControl();
     void saveMapping();
     void beginCapture(const QString& controlId);
