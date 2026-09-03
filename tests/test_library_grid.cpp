@@ -13,6 +13,7 @@
 #include <QBuffer>
 #include "LibraryWidget.hpp"
 #include "GameArtworkLoader.hpp"
+#include "ArtworkIndex.hpp"
 #include "pocketpartner/storage/DatabaseManager.hpp"
 #include "pocket/storage/SchemaMigration.hpp"
 #include "pocket/storage/ArtworkCache.hpp"
@@ -61,6 +62,29 @@ private slots:
         Pocket::App::GameArtworkLoader loader(cache); QSignalSpy spy(&loader,&Pocket::App::GameArtworkLoader::artworkReady); loader.setArtworkFromFile("manual",imagePath); QCOMPARE(spy.count(),1); QVERIFY(!cache->getCachedPath("manual",Pocket::Storage::ArtworkType::BoxArt).empty());
         const QStringList candidates=Pocket::App::GameArtworkLoader::titleCandidates("Zelda - Minish Cap (USA) [!].gba");
         QVERIFY(candidates.contains("Zelda - Minish Cap (USA) [!]")); QVERIFY(candidates.contains("Zelda - Minish Cap")); QVERIFY(candidates.contains("Zelda - Minish Cap (USA, Europe)"));
+    }
+    void artworkIndexMatchesAndCaches() {
+        const QStringList names{
+            "Pokemon - Edicion Esmeralda (Spain)",
+            "Pokemon - Emerald Version (USA, Europe)",
+            "Pokemon - Edicion Negra 2 (Spain) (NDSi Enhanced)",
+            "Pokemon - Edicion Platino (Spain)",
+            "Mario Kart - Super Circuit (USA)"
+        };
+        QCOMPARE(Pocket::App::ArtworkIndex::bestMatch("Pokemon Esmeralda", names), QString("Pokemon - Edicion Esmeralda (Spain)"));
+        QCOMPARE(Pocket::App::ArtworkIndex::bestMatch("Pokemon Negro 2", names), QString("Pokemon - Edicion Negra 2 (Spain) (NDSi Enhanced)"));
+        QCOMPARE(Pocket::App::ArtworkIndex::bestMatch("Pokemon Platino", names), QString("Pokemon - Edicion Platino (Spain)"));
+        QVERIFY(Pocket::App::ArtworkIndex::bestMatch("Metroid Fusion", names).isEmpty());
+
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString repo = "Nintendo_-_Game_Boy_Advance";
+        Pocket::App::ArtworkIndex index(directory.path());
+        index.setNames(repo, names);
+        Pocket::App::ArtworkIndex cachedIndex(directory.path());
+        cachedIndex.ensureLoaded(repo);
+        QVERIFY(cachedIndex.isLoaded(repo));
+        QCOMPARE(cachedIndex.names(repo), names);
     }
     void zoomChangesDelegateSizeHint() {
         QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo); Pocket::App::LibraryWidget widget(repo);

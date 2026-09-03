@@ -1,4 +1,5 @@
 #include "GameArtworkLoader.hpp"
+#include "ArtworkIndex.hpp"
 
 #include "pocket/storage/ArtworkCache.hpp"
 #include "pocket/storage/GameMetadataResolver.hpp"
@@ -21,6 +22,15 @@ QString platformForSystem(const QString& system)
     return {};
 }
 
+QString repoForSystem(const QString& system)
+{
+    if (system == "GB") return "Nintendo_-_Game_Boy";
+    if (system == "GBC") return "Nintendo_-_Game_Boy_Color";
+    if (system == "GBA") return "Nintendo_-_Game_Boy_Advance";
+    if (system == "NDS") return "Nintendo_-_Nintendo_DS";
+    return {};
+}
+
 void appendCandidate(QStringList& candidates, const QString& candidate)
 {
     const QString trimmed = candidate.trimmed();
@@ -40,7 +50,16 @@ GameArtworkLoader::GameArtworkLoader(std::shared_ptr<Storage::ArtworkCache> cach
     : QObject(parent)
     , m_cache(std::move(cache))
     , m_provider(new Storage::LibretroArtworkProvider(m_cache, this))
+    , m_index(new ArtworkIndex(QString::fromStdString(m_cache->cacheDir()), this))
 {
+    connect(m_index, &ArtworkIndex::indexLoaded, this, [this](const QString& repo) {
+        const QList<QString> gameIds = m_indexRequests.keys();
+        for (const QString& gameId : gameIds) {
+            if (m_indexRequests.value(gameId).repo == repo) {
+                fetchIndexMatch(gameId);
+            }
+        }
+    });
 }
 
 QStringList GameArtworkLoader::titleCandidates(const QString& fileBaseName)
@@ -85,15 +104,17 @@ void GameArtworkLoader::requestArtworkInternal(const QString& gameId, const QStr
     }
     if (!ignoreNegativeCache && m_cache->isNegativeCached(gameId.toStdString(), Storage::ArtworkType::BoxArt)) return;
     const QString platform = platformForSystem(system);
-    if (platform.isEmpty()) return;
+    const QString repo = repoForSystem(system);
+    if (platform.isEmpty() || repo.isEmpty()) return;
     m_pending.insert(gameId);
+    m_indexRequests.insert(gameId, {platform, repo, QFileInfo(romPath).completeBaseName()});
     fetchCandidate(gameId, platform, titleCandidates(QFileInfo(romPath).fileName()), 0);
 }
 
 void GameArtworkLoader::fetchCandidate(const QString& gameId, const QString& platform, const QStringList& candidates, int candidateIndex)
 {
     if (candidateIndex >= candidates.size()) {
-        m_pending.remove(gameId);
+        fetchIndexMatch(gameId);
         return;
     }
     m_provider->fetchArtworkAsync(platform.toStdString(), candidates.at(candidateIndex).toStdString(), Storage::ArtworkType::BoxArt,
@@ -101,10 +122,39 @@ void GameArtworkLoader::fetchCandidate(const QString& gameId, const QString& pla
             QMetaObject::invokeMethod(this, [this, gameId, platform, candidates, candidateIndex, result] {
                 if (result.success) {
                     m_pending.remove(gameId);
+                    m_indexRequests.remove(gameId);
                     emit artworkReady(gameId, QString::fromStdString(result.cachedFilePath));
                     return;
                 }
                 fetchCandidate(gameId, platform, candidates, candidateIndex + 1);
+            }, Qt::QueuedConnection);
+        });
+}
+
+void GameArtworkLoader::fetchIndexMatch(const QString& gameId)
+{
+    const IndexRequest request = m_indexRequests.value(gameId);
+    if (request.repo.isEmpty()) {
+        m_pending.remove(gameId);
+        return;
+    }
+    if (!m_index->isLoaded(request.repo)) {
+        m_index->ensureLoaded(request.repo);
+        return;
+    }
+    const QString match = ArtworkIndex::bestMatch(request.fileBaseName, m_index->names(request.repo));
+    m_indexRequests.remove(gameId);
+    if (match.isEmpty()) {
+        m_pending.remove(gameId);
+        return;
+    }
+    m_provider->fetchArtworkAsync(request.platform.toStdString(), match.toStdString(), Storage::ArtworkType::BoxArt,
+        [this, gameId](const Storage::ArtworkResult& result) {
+            QMetaObject::invokeMethod(this, [this, gameId, result] {
+                m_pending.remove(gameId);
+                if (result.success) {
+                    emit artworkReady(gameId, QString::fromStdString(result.cachedFilePath));
+                }
             }, Qt::QueuedConnection);
         });
 }

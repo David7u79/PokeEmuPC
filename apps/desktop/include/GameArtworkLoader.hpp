@@ -14,6 +14,8 @@ class LibretroArtworkProvider;
 
 namespace Pocket::App {
 
+class ArtworkIndex;
+
 class GameArtworkLoader : public QObject {
     Q_OBJECT
 
@@ -31,12 +33,21 @@ signals:
     void artworkReady(const QString& gameId, const QString& path);
 
 private:
+    struct IndexRequest {
+        QString platform;
+        QString repo;
+        QString fileBaseName;
+    };
+
     void requestArtworkInternal(const QString& gameId, const QString& system, const QString& romPath, bool ignoreNegativeCache);
     void fetchCandidate(const QString& gameId, const QString& platform, const QStringList& candidates, int candidateIndex);
+    void fetchIndexMatch(const QString& gameId);
 
     std::shared_ptr<Storage::ArtworkCache> m_cache;
     Storage::LibretroArtworkProvider* m_provider{nullptr};
+    ArtworkIndex* m_index{nullptr};
     QSet<QString> m_pending;
+    QHash<QString, IndexRequest> m_indexRequests;
 };
 
 } // namespace Pocket::App

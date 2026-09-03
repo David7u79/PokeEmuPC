@@ -2,6 +2,7 @@ add_executable(PocketPartner
     include/MainWindow.hpp
     include/LibraryWidget.hpp
     include/GameArtworkLoader.hpp
+    include/ArtworkIndex.hpp
     include/GameCardDelegate.hpp
     include/SettingsWidget.hpp
     include/CoresWidget.hpp
@@ -20,6 +21,7 @@ add_executable(PocketPartner
     src/MainWindow.cpp
     src/LibraryWidget.cpp
     src/GameArtworkLoader.cpp
+    src/ArtworkIndex.cpp
     src/GameCardDelegate.cpp
     src/SettingsWidget.cpp
     src/CoresWidget.cpp
