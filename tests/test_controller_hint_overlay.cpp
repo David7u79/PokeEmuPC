@@ -158,11 +158,43 @@ private slots:
         Pocket::App::ControllerHintOverlay overlay;
         overlay.setSystem(QStringLiteral("GBA"));
         overlay.setMapping(std::make_shared<Pocket::Input::ControllerMapping>());
-        const QSize size(800, 600);
-        const QRectF up = overlay.controlRect(QStringLiteral("DPAD_UP"), size);
-        const QRectF down = overlay.controlRect(QStringLiteral("DPAD_DOWN"), size);
-        QVERIFY(overlay.labelRectFor(QStringLiteral("DPAD_UP"), size).center().y() < up.center().y());
-        QVERIFY(overlay.labelRectFor(QStringLiteral("DPAD_DOWN"), size).center().y() > down.center().y());
+        // Roomy: the badge belongs on the button it names.
+        const QSize roomy(800, 600);
+        QCOMPARE(overlay.labelRectFor(QStringLiteral("DPAD_UP"), roomy),
+                 overlay.controlRect(QStringLiteral("DPAD_UP"), roomy));
+
+        // Cramped: it goes above and below, never to one side, which is what used to
+        // leave the up label floating next to the pad.
+        const QSize cramped(240, 180);
+        const QRectF up = overlay.controlRect(QStringLiteral("DPAD_UP"), cramped);
+        const QRectF down = overlay.controlRect(QStringLiteral("DPAD_DOWN"), cramped);
+        const QRectF upLabel = overlay.labelRectFor(QStringLiteral("DPAD_UP"), cramped);
+        const QRectF downLabel = overlay.labelRectFor(QStringLiteral("DPAD_DOWN"), cramped);
+        QVERIFY(upLabel.center().y() < up.center().y());
+        QVERIFY(downLabel.center().y() > down.center().y());
+        QVERIFY(qAbs(upLabel.center().x() - up.center().x()) < 1.0);
+        QVERIFY(qAbs(downLabel.center().x() - down.center().x()) < 1.0);
+    }
+
+    void labelsNeverCoverTheScreen()
+    {
+        // The GB's D-pad sits right under the screen: its up label used to land on
+        // the running picture.
+        for (const QString& system : {QStringLiteral("GB"), QStringLiteral("GBC"), QStringLiteral("GBA")}) {
+            Pocket::App::ControllerHintOverlay overlay;
+            overlay.setSystem(system);
+            overlay.setMapping(std::make_shared<Pocket::Input::ControllerMapping>());
+            const QSize size(800, 600);
+            const QRectF screen = overlay.controlRect(QStringLiteral("SCREEN"), size);
+            QVERIFY(!screen.isEmpty());
+            for (const QString& id : {QStringLiteral("DPAD_UP"), QStringLiteral("DPAD_DOWN"),
+                                      QStringLiteral("DPAD_LEFT"), QStringLiteral("DPAD_RIGHT"),
+                                      QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("START"),
+                                      QStringLiteral("SELECT")}) {
+                const QRectF label = overlay.labelRectFor(id, size);
+                QVERIFY2(!label.intersects(screen), qPrintable(system + " label " + id + " covers the screen"));
+            }
+        }
     }
 
     void gbaControlDisplayNames()
