@@ -2,6 +2,7 @@
 
 #include "ArtworkIndex.hpp"
 #include "GameArtworkLoader.hpp"
+#include "pocket/storage/LibretroArtworkProvider.hpp"
 
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
@@ -132,10 +133,13 @@ void ArtworkPickerDialog::previewSelection()
     m_currentPreviewName = m_candidates->currentItem()->text();
     m_preview->setPixmap(QPixmap());
     m_preview->setText("Cargando…");
-    const QByteArray encodedName = QUrl::toPercentEncoding(m_currentPreviewName);
-    const QString url = QString("https://raw.githubusercontent.com/libretro-thumbnails/%1/master/%2/Named_Boxarts/%3.png")
-                            .arg(m_repo, m_platform, QString::fromLatin1(encodedName));
-    QNetworkReply* reply = m_network.get(QNetworkRequest(QUrl(url)));
+    // Built by the provider, not by hand: the URL assembled here carried an extra
+    // path segment and every preview came back 404.
+    const std::string url = Storage::LibretroArtworkProvider::buildUrl(
+        m_platform.toStdString(), m_currentPreviewName.toStdString(), Storage::ArtworkType::BoxArt);
+    QNetworkRequest request{QUrl(QString::fromStdString(url))};
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    QNetworkReply* reply = m_network.get(request);
     const QString requestedName = m_currentPreviewName;
     connect(reply, &QNetworkReply::finished, this, [this, reply, requestedName] {
         const QByteArray bytes = reply->readAll();

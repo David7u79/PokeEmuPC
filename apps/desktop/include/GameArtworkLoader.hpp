@@ -44,6 +44,7 @@ private:
     void requestArtworkInternal(const QString& gameId, const QString& system, const QString& romPath, bool ignoreNegativeCache);
     void fetchCandidate(const QString& gameId, const QString& platform, const QStringList& candidates, int candidateIndex);
     void fetchIndexMatch(const QString& gameId);
+    void adoptFetchedFile(const QString& gameId, const QString& fetchedPath);
 
     std::shared_ptr<Storage::ArtworkCache> m_cache;
     Storage::LibretroArtworkProvider* m_provider{nullptr};

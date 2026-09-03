@@ -123,12 +123,32 @@ void GameArtworkLoader::fetchCandidate(const QString& gameId, const QString& pla
                 if (result.success) {
                     m_pending.remove(gameId);
                     m_indexRequests.remove(gameId);
-                    emit artworkReady(gameId, QString::fromStdString(result.cachedFilePath));
+                    adoptFetchedFile(gameId, QString::fromStdString(result.cachedFilePath));
                     return;
                 }
                 fetchCandidate(gameId, platform, candidates, candidateIndex + 1);
             }, Qt::QueuedConnection);
         });
+}
+
+void GameArtworkLoader::adoptFetchedFile(const QString& gameId, const QString& fetchedPath)
+{
+    // The provider files a download under the libretro title it asked for, so the
+    // next launch looks for it under the game's id and downloads it all over again.
+    // Store a copy under the id, which is the key everything else uses.
+    QFile file(fetchedPath);
+    QByteArray bytes;
+    if (file.open(QIODevice::ReadOnly)) bytes = file.readAll();
+    if (!bytes.isEmpty()
+        && m_cache->saveArtwork(gameId.toStdString(), Storage::ArtworkType::BoxArt,
+                                reinterpret_cast<const uint8_t*>(bytes.constData()), size_t(bytes.size()))) {
+        const auto cached = m_cache->getCachedPath(gameId.toStdString(), Storage::ArtworkType::BoxArt);
+        if (!cached.empty()) {
+            emit artworkReady(gameId, QString::fromStdString(cached));
+            return;
+        }
+    }
+    emit artworkReady(gameId, fetchedPath);
 }
 
 void GameArtworkLoader::fetchIndexMatch(const QString& gameId)
@@ -153,7 +173,7 @@ void GameArtworkLoader::fetchIndexMatch(const QString& gameId)
             QMetaObject::invokeMethod(this, [this, gameId, result] {
                 m_pending.remove(gameId);
                 if (result.success) {
-                    emit artworkReady(gameId, QString::fromStdString(result.cachedFilePath));
+                    adoptFetchedFile(gameId, QString::fromStdString(result.cachedFilePath));
                 }
             }, Qt::QueuedConnection);
         });

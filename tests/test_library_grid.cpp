@@ -70,6 +70,7 @@ private slots:
             "Pokemon - Emerald Version (USA, Europe)",
             "Pokemon - Edicion Negra 2 (Spain) (NDSi Enhanced)",
             "Pokemon - Edicion Platino (Spain)",
+            "Pokemon - Platin-Edition (Germany)",
             "Mario Kart - Super Circuit (USA)"
         };
         QCOMPARE(Pocket::App::ArtworkIndex::bestMatch("Pokemon Esmeralda", names), QString("Pokemon - Edicion Esmeralda (Spain)"));
@@ -97,6 +98,7 @@ private slots:
             "Pokemon - Emerald Version (USA, Europe)",
             "Pokemon - Edicion Negra 2 (Spain) (NDSi Enhanced)",
             "Pokemon - Edicion Platino (Spain)",
+            "Pokemon - Platin-Edition (Germany)",
             "Mario Kart - Super Circuit (USA)"
         };
         QTemporaryDir directory;

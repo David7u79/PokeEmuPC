@@ -45,18 +45,22 @@ int levenshtein(const QString& left, const QString& right)
     return previous.back();
 }
 
-bool tokensMatch(const QString& queryToken, const QStringList& candidateTokens)
+// An exact word is worth more than one that merely differs by a letter, otherwise
+// "Pokemon Platino" scores the German "Platin-Edition" the same as the Spanish
+// "Edicion Platino" and the shorter name wins on the tie-break.
+double tokenScore(const QString& queryToken, const QStringList& candidateTokens)
 {
+    double best = 0.0;
     for (const QString& candidateToken : candidateTokens) {
         if (queryToken == candidateToken) {
-            return true;
+            return 1.0;
         }
         if (queryToken.size() >= 4 && candidateToken.size() >= 4
             && levenshtein(queryToken, candidateToken) <= 1) {
-            return true;
+            best = std::max(best, 0.8);
         }
     }
-    return false;
+    return best;
 }
 
 struct MatchScore {
@@ -74,14 +78,12 @@ MatchScore scoreMatch(const QString& query, const QString& candidate)
     candidateTokens.erase(std::remove_if(candidateTokens.begin(), candidateTokens.end(), [&filler](const QString& token) {
         return filler.contains(token);
     }), candidateTokens.end());
-    int matches = 0;
+    double matched = 0.0;
     for (const QString& token : queryTokens) {
-        if (tokensMatch(token, candidateTokens)) {
-            ++matches;
-        }
+        matched += tokenScore(token, candidateTokens);
     }
     return {candidate, candidateNormalized,
-            queryTokens.isEmpty() ? 0.0 : static_cast<double>(matches) / queryTokens.size()};
+            queryTokens.isEmpty() ? 0.0 : matched / queryTokens.size()};
 }
 
 } // namespace
