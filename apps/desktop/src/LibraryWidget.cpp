@@ -6,16 +6,22 @@
 
 #include <QComboBox>
 #include <QDateTime>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QSettings>
 #include <QShortcut>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 
 namespace {
 
@@ -25,7 +31,8 @@ enum GameRoles {
     ArtworkRole,
     ImportedRole,
     RomPathRole,
-    FileSizeRole
+    FileSizeRole,
+    OrderRole
 };
 
 QString systemForCategory(const QString& category)
@@ -50,7 +57,8 @@ QString initials(const QString& title)
 class GameProxyModel final : public QSortFilterProxyModel {
 public:
     QString category{"Todos"};
-    bool sortByRecent{false};
+    enum class SortMode { Personal, Title, Recent };
+    SortMode sortMode{SortMode::Title};
 
     void refresh()
     {
@@ -76,7 +84,11 @@ protected:
 
     bool lessThan(const QModelIndex& left, const QModelIndex& right) const override
     {
-        if (sortByRecent) {
+        if (sortMode == SortMode::Personal) {
+            return sourceModel()->data(left, OrderRole).toLongLong()
+                   < sourceModel()->data(right, OrderRole).toLongLong();
+        }
+        if (sortMode == SortMode::Recent) {
             return sourceModel()->data(left, ImportedRole).toLongLong()
                    > sourceModel()->data(right, ImportedRole).toLongLong();
         }
@@ -88,11 +100,16 @@ protected:
 
 namespace Pocket::App {
 
-LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWidget* parent)
+LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWidget* parent,
+                             QString settingsOrganization, QString settingsApplication)
     : QWidget(parent)
     , m_repo(std::move(repo))
+    , m_settingsOrganization(std::move(settingsOrganization))
+    , m_settingsApplication(std::move(settingsApplication))
 {
     auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
+    mainLayout->setSpacing(10);
     auto* header = new QHBoxLayout;
     auto* title = new QLabel("Biblioteca", this);
     QFont titleFont = title->font();
@@ -105,7 +122,10 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     m_search->setClearButtonEnabled(true);
     m_sortOrder = new QComboBox(this);
     m_sortOrder->setObjectName("sortOrder");
-    m_sortOrder->addItems({"Título (A-Z)", "Añadido recientemente"});
+    m_sortOrder->addItems({"Personalizado", "Título (A-Z)", "Añadido recientemente"});
+    if (QSettings(m_settingsOrganization, m_settingsApplication).value("library/order").toStringList().isEmpty()) {
+        m_sortOrder->setCurrentIndex(1);
+    }
     m_addButton = new QPushButton("Añadir juego", this);
     m_addButton->setObjectName("addGameButton");
     header->addWidget(title);
@@ -123,13 +143,16 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     m_proxy->setFilterKeyColumn(0);
 
     auto* content = new QHBoxLayout;
+    content->setSpacing(10);
     m_categories = new QListWidget(this);
     m_categories->setObjectName("categoryList");
     m_categories->setFixedWidth(150);
     m_categories->setFrameShape(QFrame::NoFrame);
+    m_categories->setSelectionMode(QAbstractItemView::SingleSelection);
     for (const QString& category : {"Todos", "Recientes", "Game Boy", "Game Boy Color", "Game Boy Advance", "Nintendo DS"}) {
         auto* item = new QListWidgetItem(category, m_categories);
         item->setData(Qt::UserRole, category);
+        item->setSizeHint(QSize(item->sizeHint().width(), 28));
     }
     m_categories->setCurrentRow(0);
     content->addWidget(m_categories);
@@ -139,14 +162,17 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     m_grid->setObjectName("gameGrid");
     m_grid->setViewMode(QListView::IconMode);
     m_grid->setResizeMode(QListView::Adjust);
-    m_grid->setMovement(QListView::Static);
+    m_grid->setMovement(QListView::Snap);
     m_grid->setUniformItemSizes(true);
-    m_grid->setSpacing(12);
+    m_grid->setSpacing(16);
+    m_grid->setContentsMargins(4, 4, 4, 4);
     m_grid->setSelectionMode(QAbstractItemView::SingleSelection);
     m_grid->setWordWrap(true);
     m_grid->setMouseTracking(true);
     m_grid->viewport()->setMouseTracking(true);
     m_grid->setModel(m_proxy);
+    m_grid->setAcceptDrops(false);
+    m_grid->setDragEnabled(false);
     m_delegate = new GameCardDelegate(m_grid);
     m_grid->setItemDelegate(m_delegate);
     center->addWidget(m_grid);
@@ -160,7 +186,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     auto* detailLayout = new QVBoxLayout(detail);
     m_detailCover = new QLabel(detail);
     m_detailCover->setObjectName("detailCover");
-    m_detailCover->setFixedSize(240, 240);
+    m_detailCover->setFixedSize(260, 260);
     m_detailCover->setAlignment(Qt::AlignCenter);
     m_detailTitle = new QLabel("Selecciona un juego", detail);
     m_detailTitle->setObjectName("detailTitle");
@@ -177,6 +203,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     m_searchArtworkButton = new QPushButton("Elegir carátula…", detail);
     m_chooseArtworkButton = new QPushButton("Elegir imagen…", detail);
     m_removeButton = new QPushButton("Quitar de la biblioteca", detail);
+    detailLayout->setSpacing(6);
     detailLayout->addWidget(m_detailCover, 0, Qt::AlignHCenter);
     detailLayout->addWidget(m_detailTitle);
     detailLayout->addWidget(m_detailInfo);
@@ -190,12 +217,13 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     mainLayout->addLayout(content, 1);
 
     auto* footer = new QHBoxLayout;
+    footer->setSpacing(10);
     m_statusLabel = new QLabel(this);
     m_statusLabel->setObjectName("libraryStatus");
     m_cardZoom = new QSlider(Qt::Horizontal, this);
     m_cardZoom->setObjectName("cardZoom");
     m_cardZoom->setRange(120, 240);
-    m_cardZoom->setValue(QSettings("PocketPartnerProject", "PocketPartner").value("library/cardWidth", 176).toInt());
+    m_cardZoom->setValue(QSettings(m_settingsOrganization, m_settingsApplication).value("library/cardWidth", 176).toInt());
     footer->addWidget(m_statusLabel);
     footer->addStretch();
     footer->addWidget(new QLabel("Zoom", this));
@@ -203,6 +231,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     mainLayout->addLayout(footer);
 
     m_artworkLoader = new GameArtworkLoader(this);
+    setAcceptDrops(true);
     connect(m_addButton, &QPushButton::clicked, this, &LibraryWidget::onAddGameClicked);
     connect(m_search, &QLineEdit::textChanged, this, [this](const QString& text) {
         m_proxy->setFilterFixedString(text);
@@ -235,7 +264,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     connect(m_cardZoom, &QSlider::valueChanged, this, [this](int width) {
         m_delegate->setCardWidth(width);
         m_grid->doItemsLayout();
-        QSettings("PocketPartnerProject", "PocketPartner").setValue("library/cardWidth", width);
+        QSettings(m_settingsOrganization, m_settingsApplication).setValue("library/cardWidth", width);
     });
     connect(m_artworkLoader, &GameArtworkLoader::artworkReady, this, [this](const QString& id, const QString& path) {
         for (int row = 0; row < m_model->rowCount(); ++row) {
@@ -244,6 +273,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
         }
         updateDetail(m_grid->currentIndex());
     });
+    connect(m_proxy, &QAbstractItemModel::rowsMoved, this, [this] { savePersonalOrder(); });
     refreshLibrary();
 }
 
@@ -251,9 +281,16 @@ void LibraryWidget::applyFilters()
 {
     auto* proxy = static_cast<GameProxyModel*>(m_proxy);
     proxy->category = m_categories->currentItem() ? m_categories->currentItem()->data(Qt::UserRole).toString() : "Todos";
-    proxy->sortByRecent = m_sortOrder->currentIndex() == 1;
+    proxy->sortMode = m_sortOrder->currentIndex() == 0 ? GameProxyModel::SortMode::Personal
+        : m_sortOrder->currentIndex() == 2 ? GameProxyModel::SortMode::Recent
+                                           : GameProxyModel::SortMode::Title;
     proxy->refresh();
     m_proxy->sort(0);
+    const bool personal = proxy->sortMode == GameProxyModel::SortMode::Personal;
+    m_grid->setDragDropMode(personal ? QAbstractItemView::InternalMove : QAbstractItemView::NoDragDrop);
+    m_grid->setDefaultDropAction(Qt::MoveAction);
+    m_grid->setDragEnabled(personal);
+    m_grid->setAcceptDrops(personal);
     updateStatus();
 }
 
@@ -289,7 +326,28 @@ void LibraryWidget::refreshLibrary()
 {
     if (!m_repo) return;
     m_model->clear();
-    for (const Core::Game& game : m_repo->getAllGames()) {
+    const QStringList savedOrder = QSettings(m_settingsOrganization, m_settingsApplication).value("library/order").toStringList();
+    const std::vector<Core::Game> games = m_repo->getAllGames();
+    QHash<QString, int> savedPositions;
+    for (int position = 0; position < savedOrder.size(); ++position) {
+        savedPositions.insert(savedOrder.at(position), position);
+    }
+    QVector<const Core::Game*> orderedGames;
+    orderedGames.reserve(static_cast<qsizetype>(games.size()));
+    for (const Core::Game& game : games) {
+        orderedGames.append(&game);
+    }
+    std::sort(orderedGames.begin(), orderedGames.end(), [&savedPositions](const Core::Game* left, const Core::Game* right) {
+        const QString leftId = QString::fromStdString(left->id.toString());
+        const QString rightId = QString::fromStdString(right->id.toString());
+        const int leftPosition = savedPositions.value(leftId, std::numeric_limits<int>::max());
+        const int rightPosition = savedPositions.value(rightId, std::numeric_limits<int>::max());
+        if (leftPosition != rightPosition) return leftPosition < rightPosition;
+        return left->importedAtTs > right->importedAtTs;
+    });
+    int order = 0;
+    for (const Core::Game* gamePtr : orderedGames) {
+        const Core::Game& game = *gamePtr;
         auto* item = new QStandardItem(QString::fromStdString(game.title));
         const QString id = QString::fromStdString(game.id.toString());
         const QString system = QString::fromStdString(Core::GameSystemUtils::toString(game.system));
@@ -299,6 +357,7 @@ void LibraryWidget::refreshLibrary()
         item->setData(qint64(game.importedAtTs), ImportedRole);
         item->setData(QString::fromStdString(game.romPath), RomPathRole);
         item->setData(qulonglong(game.fileSizeBytes), FileSizeRole);
+        item->setData(order++, OrderRole);
         m_model->appendRow(item);
         m_artworkLoader->requestArtwork(id, item->text(), system, QString::fromStdString(game.romPath));
     }
@@ -343,7 +402,7 @@ void LibraryWidget::updateDetail(const QModelIndex& index)
     m_detailPath->setToolTip(romPath);
     QPixmap pixmap(index.data(ArtworkRole).toString());
     if (!pixmap.isNull()) {
-        m_detailCover->setPixmap(pixmap.scaled(240, 240, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        m_detailCover->setPixmap(pixmap.scaled(260, 260, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     } else {
         m_detailCover->setPixmap(QPixmap());
         m_detailCover->setText(initials(QString::fromStdString(game->title)));
@@ -369,8 +428,63 @@ void LibraryWidget::removeSelectedGame()
 void LibraryWidget::onAddGameClicked()
 {
     const QString filePath = QFileDialog::getOpenFileName(this, "Import Game ROM", {}, "Supported ROMs (*.gb *.gbc *.gba *.nds);;All Files (*.*)");
-    if (filePath.isEmpty() || !m_repo || m_repo->isPathAlreadyImported(filePath.toStdString())) return;
-    if (m_repo->importGame(filePath.toStdString()).status == Storage::ImportResultStatus::Success) refreshLibrary();
+    importGames({filePath});
+}
+
+void LibraryWidget::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void LibraryWidget::dropEvent(QDropEvent* event)
+{
+    if (!event->mimeData()->hasUrls()) {
+        event->ignore();
+        return;
+    }
+    QStringList filePaths;
+    for (const QUrl& url : event->mimeData()->urls()) {
+        const QFileInfo file(url.toLocalFile());
+        if (url.isLocalFile() && QStringList({"gb", "gbc", "gba", "nds"}).contains(file.suffix(), Qt::CaseInsensitive)) {
+            filePaths.append(file.absoluteFilePath());
+        }
+    }
+    importGames(filePaths);
+    event->acceptProposedAction();
+}
+
+void LibraryWidget::importGames(const QStringList& filePaths)
+{
+    if (!m_repo) {
+        return;
+    }
+    bool imported = false;
+    for (const QString& filePath : filePaths) {
+        if (filePath.isEmpty() || m_repo->isPathAlreadyImported(filePath.toStdString())) {
+            continue;
+        }
+        imported = m_repo->importGame(filePath.toStdString()).status == Storage::ImportResultStatus::Success || imported;
+    }
+    if (imported) {
+        refreshLibrary();
+    }
+}
+
+void LibraryWidget::savePersonalOrder()
+{
+    if (m_sortOrder->currentIndex() != 0) {
+        return;
+    }
+    QStringList ids;
+    for (int row = 0; row < m_proxy->rowCount(); ++row) {
+        const QModelIndex proxyIndex = m_proxy->index(row, 0);
+        const QModelIndex sourceIndex = m_proxy->mapToSource(proxyIndex);
+        m_model->setData(sourceIndex, row, OrderRole);
+        ids.append(proxyIndex.data(GameIdRole).toString());
+    }
+    QSettings(m_settingsOrganization, m_settingsApplication).setValue("library/order", ids);
 }
 
 } // namespace Pocket::App
