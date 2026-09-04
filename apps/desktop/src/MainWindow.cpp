@@ -11,6 +11,12 @@
 #include <QVBoxLayout>
 #include <algorithm>
 #include "SaveStateSlots.hpp"
+#include "Theme.hpp"
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <dwmapi.h>
+#endif
 
 namespace Pocket::App {
 
@@ -20,6 +26,22 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
 
     setWindowTitle("PocketPartner - Desktop Companion & Emulator");
     resize(900, 600);
+
+#ifdef Q_OS_WIN
+    // Paint the native caption in the application background so the window chrome
+    // stops reading as a separate strip. Native buttons and dragging untouched;
+    // the attributes are simply ignored on builds that do not know them.
+    {
+        const HWND handle = reinterpret_cast<HWND>(winId());
+        BOOL darkMode = TRUE;
+        DwmSetWindowAttribute(handle, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &darkMode, sizeof(darkMode));
+        const QColor caption = Theme::surface();
+        COLORREF captionColor = RGB(caption.red(), caption.green(), caption.blue());
+        DwmSetWindowAttribute(handle, 35 /* DWMWA_CAPTION_COLOR */, &captionColor, sizeof(captionColor));
+        COLORREF borderColor = captionColor;
+        DwmSetWindowAttribute(handle, 34 /* DWMWA_BORDER_COLOR */, &borderColor, sizeof(borderColor));
+    }
+#endif
 
     auto* centralWidget = new QWidget(this);
     auto* centralLayout = new QVBoxLayout(centralWidget);
@@ -42,6 +64,9 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
             *m_controllerMapping = Pocket::Input::ControllerMapping::keyboardPreset();
         }
     }
+
+    m_gamepad = new GamepadReader(this);
+    connect(m_gamepad, &GamepadReader::buttonChanged, this, &MainWindow::applyGamepadButton);
 
     m_libraryWidget = new LibraryWidget(gameRepo, m_stackedWidget);
     m_emulatorPage = new QWidget(m_stackedWidget);
@@ -249,6 +274,51 @@ MainWindow::MainWindow(std::shared_ptr<PocketPartner::Storage::DatabaseManager> 
                 if (m_ndsEngine)
                     m_ndsEngine->sendButtonEvent(button, pressed);
             });
+}
+
+void MainWindow::applyGamepadButton(int presetIndex, bool pressed) {
+    const QStringList& ids = Pocket::Input::ControllerMapping::presetControlIds();
+    if (presetIndex < 0 || presetIndex >= ids.size())
+        return;
+
+    // Remapping a control from the console art accepts pad buttons too, so the
+    // press lands on the capture instead of on the game.
+    const bool onEmulatorPage = m_stackedWidget->currentWidget() == m_emulatorPage;
+    const bool gbaVisible = m_emulatorStack->currentWidget() == m_emulatorWidget;
+    if (onEmulatorPage && gbaVisible && !m_emulatorWidget->capturingControlId().isEmpty()) {
+        if (pressed) m_emulatorWidget->applyCapturedGamepadBinding(presetIndex);
+        return;
+    }
+
+    auto* engine = activeEngine();
+    if (!engine || !engine->isRunning() || !onEmulatorPage)
+        return;
+
+    const QString system = m_emulatorStack->currentWidget() == m_ndsDisplayWidget
+        ? QStringLiteral("NDS") : QStringLiteral("GBA");
+
+    // A control the user mapped to this pad button wins; otherwise the generic
+    // preset order applies, so a pad works the moment it is plugged in.
+    QString controlId = ids.at(presetIndex);
+    if (m_controllerMapping) {
+        for (const QString& candidate : ids) {
+            const auto binding = m_controllerMapping->binding(system, candidate);
+            if (binding && binding->device == Pocket::Input::InputDevice::Gamepad
+                && binding->code == presetIndex) {
+                controlId = candidate;
+                break;
+            }
+        }
+    }
+
+    if (const auto button = Pocket::Input::ControllerMapping::emulatorButtonFor(controlId))
+        engine->sendButtonEvent(*button, pressed);
+
+    // Same feedback the keyboard gets: the console art lights the pressed control.
+    if (m_emulatorStack->currentWidget() == m_ndsDisplayWidget)
+        m_ndsDisplayWidget->setControlPressed(controlId, pressed);
+    else
+        m_emulatorWidget->setControlPressed(controlId, pressed);
 }
 
 Pocket::Emulator::LibretroEngineBase* MainWindow::activeEngine() const {

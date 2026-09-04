@@ -11,7 +11,18 @@ bool InputBinding::isValid() const
 QString InputBinding::label() const
 {
     if (!isValid()) return {};
-    if (device == InputDevice::Gamepad) return QStringLiteral("Gamepad Button %1").arg(code);
+    if (device == InputDevice::Gamepad) {
+        // The code is an index into the preset order, which is also the order the
+        // XInput reader uses, so it can be shown as the button the pad is labelled with.
+        static const QStringList names{QStringLiteral("D-Pad ↑"), QStringLiteral("D-Pad ↓"),
+                                       QStringLiteral("D-Pad ←"), QStringLiteral("D-Pad →"),
+                                       QStringLiteral("A"), QStringLiteral("B"),
+                                       QStringLiteral("X"), QStringLiteral("Y"),
+                                       QStringLiteral("LB"), QStringLiteral("RB"),
+                                       QStringLiteral("Start"), QStringLiteral("Back")};
+        if (code < names.size()) return QStringLiteral("Mando %1").arg(names.at(code));
+        return QStringLiteral("Mando botón %1").arg(code);
+    }
     if (code == 0x01000004) return QStringLiteral("Keyboard Return");
     if (code == 0x20) return QStringLiteral("Keyboard Space");
     return QStringLiteral("Keyboard %1").arg(QChar(code));

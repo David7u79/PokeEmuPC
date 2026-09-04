@@ -5,6 +5,7 @@
 #include "GameInspector.hpp"
 #include "ArtworkPickerDialog.hpp"
 #include "EmptyStateWidget.hpp"
+#include "Icons.hpp"
 #include "LibrarySidebar.hpp"
 #include "Theme.hpp"
 
@@ -16,6 +17,8 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHash>
+#include <QImageReader>
+#include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QSettings>
@@ -100,44 +103,81 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     , m_settingsApplication(std::move(settingsApplication))
 {
     auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(12, 12, 12, 12);
-    mainLayout->setSpacing(10);
+    mainLayout->setContentsMargins(16, 12, 16, 12);
+    mainLayout->setSpacing(12);
     auto* header = new QHBoxLayout;
     auto* title = new QLabel("My Games", this);
     QFont titleFont = title->font();
-    titleFont.setBold(true);
-    titleFont.setPointSize(titleFont.pointSize() + 2);
+    titleFont.setWeight(QFont::DemiBold);
+    titleFont.setPixelSize(15);
     title->setFont(titleFont);
+    title->setStyleSheet(QString("color: %1; background: transparent;").arg(Theme::textPrimary().name()));
+    // The count already lives next to "All Games" in the sidebar. Kept as a hidden
+    // widget so the status plumbing stays, shown nowhere.
     m_statusLabel = new QLabel(this);
     m_statusLabel->setObjectName("libraryStatus");
-    m_statusLabel->setStyleSheet(QString("color: %1;").arg(Theme::textSecondary().name()));
+    m_statusLabel->setVisible(false);
     m_search = new QLineEdit(this);
     m_search->setObjectName("librarySearch");
     m_search->setPlaceholderText("Buscar…");
     m_search->setClearButtonEnabled(true);
-    m_search->addAction(style()->standardIcon(QStyle::SP_FileDialogContentsView), QLineEdit::LeadingPosition);
+    m_search->setMinimumWidth(240);
+    m_search->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_search->addAction(Icons::icon(Icons::Name::Search, Theme::textSecondary()), QLineEdit::LeadingPosition);
     m_sortOrder = new QComboBox(this);
     m_sortOrder->setObjectName("sortOrder");
+    m_sortOrder->setToolTip("Ordenar juegos");
     m_sortOrder->addItems({"Personalizado", "Título (A-Z)", "Añadido recientemente"});
+    for (int item = 0; item < m_sortOrder->count(); ++item) {
+        m_sortOrder->setItemIcon(item, Icons::icon(Icons::Name::Sort, Theme::textSecondary()));
+    }
     if (QSettings(m_settingsOrganization, m_settingsApplication).value("library/order").toStringList().isEmpty()) {
         m_sortOrder->setCurrentIndex(1);
     }
-    m_addButton = new QPushButton("+ Añadir juego", this);
+    m_addButton = new QPushButton("Añadir juego", this);
     m_addButton->setObjectName("addGameButton");
-    m_addButton->setStyleSheet(QString("QPushButton#addGameButton { background: %1; color: %2; border-color: %1; }"
-                                        "QPushButton#addGameButton:hover { background: %3; border-color: %3; }")
-                                    .arg(Theme::accent().name(), Theme::surface().name(), Theme::accentPressed().name()));
+    m_addButton->setIcon(Icons::icon(Icons::Name::Plus, Theme::accent(), 15));
+    m_addButton->setToolTip("Añadir un juego a la biblioteca");
+    // An explicit action, but quieter than Play: accent outline, not a filled slab.
+    m_addButton->setStyleSheet(QString("QPushButton#addGameButton { background: %1; color: %2; border: 1px solid %3;"
+                                       " border-radius: 6px; padding: 6px 12px; font-weight: 600; }"
+                                       "QPushButton#addGameButton:hover { background: %4; color: white; border-color: %4; }")
+                                    .arg(Theme::rgba(Theme::surfaceControl()), Theme::accent().name(),
+                                         Theme::rgba(Theme::borderHover()), Theme::accent().name()));
     header->addWidget(title);
     header->addWidget(m_statusLabel);
-    header->addStretch();
-    header->addWidget(m_search);
+    header->addSpacing(16);
+    header->addWidget(m_search, 1);
     header->addWidget(m_sortOrder);
+
+    // The bare slider read as a volume control. Framed by two grid icons and with
+    // tooltips it says what it changes without any label.
     m_cardZoom = new QSlider(Qt::Horizontal, this);
     m_cardZoom->setObjectName("cardZoom");
     m_cardZoom->setRange(120, 240);
     m_cardZoom->setValue(QSettings(m_settingsOrganization, m_settingsApplication).value("library/cardWidth", 176).toInt());
-    m_cardZoom->setFixedWidth(100);
-    header->addWidget(m_cardZoom);
+    m_cardZoom->setFixedWidth(84);
+    m_cardZoom->setToolTip("Tamaño de carátulas");
+    auto* smallCovers = new QLabel(this);
+    smallCovers->setPixmap(Icons::pixmap(Icons::Name::GridSmall, Theme::textSecondary(), 15));
+    smallCovers->setToolTip("Carátulas más pequeñas");
+    auto* largeCovers = new QLabel(this);
+    largeCovers->setPixmap(Icons::pixmap(Icons::Name::GridLarge, Theme::textSecondary(), 15));
+    largeCovers->setToolTip("Carátulas más grandes");
+    // The three pieces read as one control instead of a slider floating alone.
+    auto* zoomGroup = new QWidget(this);
+    zoomGroup->setObjectName("coverSizeGroup");
+    zoomGroup->setStyleSheet(QString("QWidget#coverSizeGroup { background: %1; border: 1px solid %2; border-radius: 6px; }"
+                                     "QWidget#coverSizeGroup:hover { border: 1px solid %3; }")
+                                 .arg(Theme::rgba(Theme::surfaceControl()), Theme::rgba(Theme::borderSubtle()),
+                                      Theme::rgba(Theme::borderHover())));
+    auto* zoomRow = new QHBoxLayout(zoomGroup);
+    zoomRow->setContentsMargins(9, 4, 9, 4);
+    zoomRow->setSpacing(8);
+    zoomRow->addWidget(smallCovers);
+    zoomRow->addWidget(m_cardZoom);
+    zoomRow->addWidget(largeCovers);
+    header->addWidget(zoomGroup);
     header->addWidget(m_addButton);
     mainLayout->addLayout(header);
 
@@ -149,7 +189,7 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     m_proxy->setFilterKeyColumn(0);
 
     auto* content = new QHBoxLayout;
-    content->setSpacing(10);
+    content->setSpacing(14);
     m_categories = new LibrarySidebar(this);
     content->addWidget(m_categories);
 
@@ -160,8 +200,16 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     m_grid->setResizeMode(QListView::Adjust);
     m_grid->setMovement(QListView::Snap);
     m_grid->setUniformItemSizes(true);
-    m_grid->setSpacing(16);
+    m_grid->setSpacing(18);
     m_grid->setContentsMargins(4, 4, 4, 4);
+    // No frame. A barely-there surface, one step off the window, so the library
+    // reads as a place rather than a hole.
+    m_grid->setFrameShape(QFrame::NoFrame);
+    m_grid->setStyleSheet("QListView#gameGrid { background: rgba(255, 255, 255, 0.014); border: none; border-radius: 10px; }");
+    m_grid->viewport()->setAutoFillBackground(false);
+    m_grid->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_grid->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_grid->viewport()->setCursor(Qt::PointingHandCursor);
     m_grid->setSelectionMode(QAbstractItemView::SingleSelection);
     m_grid->setWordWrap(true);
     m_grid->setMouseTracking(true);
@@ -177,6 +225,9 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     content->addLayout(center, 1);
 
     m_inspector = new GameInspector(this);
+    // Contextual, not a permanent column: with nothing selected the library gets
+    // the whole width instead of a panel explaining that nothing is selected.
+    m_inspector->setVisible(false);
     content->addWidget(m_inspector);
     mainLayout->addLayout(content, 1);
 
@@ -201,40 +252,32 @@ LibraryWidget::LibraryWidget(std::shared_ptr<Storage::GameRepository> repo, QWid
     connect(m_grid, &QListView::doubleClicked, this, &LibraryWidget::playGame);
     connect(m_grid->selectionModel(), &QItemSelectionModel::currentChanged, this, &LibraryWidget::updateDetail);
     connect(m_inspector, &GameInspector::playRequested, this, [this] { playGame(m_grid->currentIndex()); });
-    connect(m_inspector, &GameInspector::changeArtworkRequested, this, [this] {
-        const auto game = gameForIndex(m_grid->currentIndex());
-        if (!game) {
-            return;
-        }
-        const QString system = QString::fromStdString(Core::GameSystemUtils::toString(game->system));
-        ArtworkPickerDialog dialog(QString::fromStdString(game->title), system, m_artworkLoader, this);
-        if (dialog.exec() == QDialog::Accepted && !dialog.chosenName().isEmpty()) {
-            m_artworkLoader->useIndexName(QString::fromStdString(game->id.toString()), system, dialog.chosenName());
-        }
-    });
-    connect(m_inspector, &GameInspector::chooseImageRequested, this, [this] {
-        const auto game = gameForIndex(m_grid->currentIndex());
-        const QString path = QFileDialog::getOpenFileName(this, "Elegir imagen", {}, "Images (*.png *.jpg *.jpeg *.bmp *.webp)");
-        if (game && !path.isEmpty()) m_artworkLoader->setArtworkFromFile(QString::fromStdString(game->id.toString()), path);
-    });
+    connect(m_inspector, &GameInspector::changeArtworkRequested, this, &LibraryWidget::changeArtwork);
+    connect(m_inspector, &GameInspector::chooseImageRequested, this, &LibraryWidget::chooseArtworkImage);
     connect(m_inspector, &GameInspector::removeRequested, this, &LibraryWidget::removeSelectedGame);
-    connect(m_inspector, &GameInspector::openLocationRequested, this, [this] {
-        const auto game = gameForIndex(m_grid->currentIndex());
-        if (game) {
-            const QString path = QFileInfo(QString::fromStdString(game->romPath)).absolutePath();
-            QDesktopServices::openUrl(QUrl::fromLocalFile(path));
-        }
-    });
+    connect(m_inspector, &GameInspector::openLocationRequested, this, &LibraryWidget::openRomLocation);
     connect(new QShortcut(QKeySequence::Delete, m_grid), &QShortcut::activated, this, &LibraryWidget::removeSelectedGame);
-    connect(m_cardZoom, &QSlider::valueChanged, this, [this](int width) {
-        m_delegate->setCardWidth(width);
-        m_grid->doItemsLayout();
-        QSettings(m_settingsOrganization, m_settingsApplication).setValue("library/cardWidth", width);
+    connect(m_cardZoom, &QSlider::valueChanged, this, [this](int value) {
+        applyCardZoom(value);
+        QSettings(m_settingsOrganization, m_settingsApplication).setValue("library/cardWidth", value);
     });
+    applyCardZoom(m_cardZoom->value());
+    connect(m_grid, &QWidget::customContextMenuRequested, this, &LibraryWidget::showCardContextMenu);
     connect(m_artworkLoader, &GameArtworkLoader::artworkReady, this, [this](const QString& id, const QString& path) {
         for (int row = 0; row < m_model->rowCount(); ++row) {
             const QModelIndex index = m_model->index(row, 0);
             if (index.data(GameIdRole).toString() == id) m_model->setData(index, path, ArtworkRole);
+        }
+        // QImageReader reads the header only: the cell can follow the real artwork
+        // without decoding anything.
+        const QSize cover = QImageReader(path).size();
+        if (cover.isValid() && cover.width() > 0) {
+            const double aspect = double(cover.height()) / cover.width();
+            if (aspect > m_tallestCover + 0.005) {
+                m_tallestCover = aspect;
+                m_delegate->setCoverAspect(aspect);
+                m_grid->doItemsLayout();
+            }
         }
         updateDetail(m_grid->currentIndex());
     });
@@ -299,6 +342,7 @@ void LibraryWidget::refreshLibrary()
 {
     if (!m_repo) return;
     m_model->clear();
+    m_tallestCover = 0.90;
     const QStringList savedOrder = QSettings(m_settingsOrganization, m_settingsApplication).value("library/order").toStringList();
     const std::vector<Core::Game> games = m_repo->getAllGames();
     QHash<QString, int> savedPositions;
@@ -355,9 +399,11 @@ void LibraryWidget::updateDetail(const QModelIndex& index)
     const auto game = gameForIndex(index);
     if (!game) {
         m_inspector->clear();
+        m_inspector->setVisible(false);
         return;
     }
     m_inspector->setGame(*game, index.data(ArtworkRole).toString());
+    m_inspector->setVisible(true);
 }
 
 void LibraryWidget::playGame(const QModelIndex& index)
@@ -421,6 +467,76 @@ void LibraryWidget::importGames(const QStringList& filePaths)
     if (imported) {
         refreshLibrary();
     }
+}
+
+void LibraryWidget::applyCardZoom(int sliderValue)
+{
+    // Discrete steps: a continuous slider produced a different column count on
+    // almost every pixel and the grid never settled into a rhythm.
+    struct Step { int threshold; int width; int spacing; };
+    // Roughly 25% smaller than the poster-sized first cut: a shelf, not a wall of
+    // posters, and four to five games per row at a normal window width.
+    static const Step steps[] = {{160, 122, 10}, {205, 150, 12}, {std::numeric_limits<int>::max(), 182, 14}};
+    const Step& step = sliderValue < steps[0].threshold ? steps[0]
+                     : sliderValue < steps[1].threshold ? steps[1]
+                                                        : steps[2];
+    m_delegate->setCardWidth(step.width);
+    m_grid->setSpacing(step.spacing);
+    m_grid->doItemsLayout();
+}
+
+void LibraryWidget::changeArtwork()
+{
+    const auto game = gameForIndex(m_grid->currentIndex());
+    if (!game) {
+        return;
+    }
+    const QString system = QString::fromStdString(Core::GameSystemUtils::toString(game->system));
+    ArtworkPickerDialog dialog(QString::fromStdString(game->title), system, m_artworkLoader, this);
+    if (dialog.exec() == QDialog::Accepted && !dialog.chosenName().isEmpty()) {
+        m_artworkLoader->useIndexName(QString::fromStdString(game->id.toString()), system, dialog.chosenName());
+    }
+}
+
+void LibraryWidget::chooseArtworkImage()
+{
+    const auto game = gameForIndex(m_grid->currentIndex());
+    const QString path = QFileDialog::getOpenFileName(this, "Elegir imagen", {}, "Images (*.png *.jpg *.jpeg *.bmp *.webp)");
+    if (game && !path.isEmpty()) m_artworkLoader->setArtworkFromFile(QString::fromStdString(game->id.toString()), path);
+}
+
+void LibraryWidget::openRomLocation()
+{
+    const auto game = gameForIndex(m_grid->currentIndex());
+    if (game) {
+        const QString path = QFileInfo(QString::fromStdString(game->romPath)).absolutePath();
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    }
+}
+
+void LibraryWidget::showCardContextMenu(const QPoint& viewportPos)
+{
+    const QModelIndex index = m_grid->indexAt(viewportPos);
+    if (!index.isValid()) return;
+    m_grid->setCurrentIndex(index);
+
+    // Same actions as the inspector's ••• menu, routed to the same slots.
+    QMenu menu(this);
+    const QColor menuIcon = Theme::textSecondary();
+    QAction* play = menu.addAction(Icons::icon(Icons::Name::Play, menuIcon), "Jugar");
+    menu.addSeparator();
+    QAction* artwork = menu.addAction(Icons::icon(Icons::Name::Image, menuIcon), "Cambiar carátula");
+    QAction* image = menu.addAction(Icons::icon(Icons::Name::Image, menuIcon), "Elegir imagen…");
+    QAction* location = menu.addAction(Icons::icon(Icons::Name::Folder, menuIcon), "Abrir ubicación del ROM");
+    menu.addSeparator();
+    QAction* remove = menu.addAction(Icons::icon(Icons::Name::Trash, menuIcon), "Quitar de la biblioteca");
+
+    const QAction* chosen = menu.exec(m_grid->viewport()->mapToGlobal(viewportPos));
+    if (chosen == play) playGame(m_grid->currentIndex());
+    else if (chosen == artwork) changeArtwork();
+    else if (chosen == image) chooseArtworkImage();
+    else if (chosen == location) openRomLocation();
+    else if (chosen == remove) removeSelectedGame();
 }
 
 void LibraryWidget::savePersonalOrder()

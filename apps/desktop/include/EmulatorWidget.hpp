@@ -41,6 +41,11 @@ public:
     void toggleViewMode();
     // Which emulator button a key drives, or nothing when it is unbound.
     std::optional<Pocket::Emulator::EmulatorButton> buttonForKey(int key) const;
+    // Lights a control on the console art from an input this widget did not read
+    // itself, such as the gamepad.
+    void setControlPressed(const QString& controlId, bool pressed);
+    QString capturingControlId() const { return m_capturingControlId; }
+    void applyCapturedGamepadBinding(int gamepadIndex);
 
 signals:
     void mappingEdited();
@@ -82,6 +87,7 @@ private:
     void saveMapping();
     void beginCapture(const QString& controlId);
     void applyCapturedBinding(int key);
+    void applyCapturedBinding(const Pocket::Input::InputBinding& binding);
 };
 
 } // namespace Pocket::App

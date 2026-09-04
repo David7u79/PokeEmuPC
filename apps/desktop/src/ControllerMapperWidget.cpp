@@ -23,6 +23,12 @@ ControllerMapperWidget::ControllerMapperWidget(std::shared_ptr<ControllerMapping
     : QWidget(parent), m_mapping(std::move(mapping))
 {
     if (!m_mapping) m_mapping = std::make_shared<ControllerMapping>();
+    // Idle until a capture starts: no polling while the user just looks at the page.
+    m_gamepad = new GamepadReader(this);
+    m_gamepad->setActive(false);
+    connect(m_gamepad, &GamepadReader::buttonChanged, this, [this](int index, bool pressed) {
+        if (pressed && !m_capturingId.isEmpty()) applyBinding({InputDevice::Gamepad, index});
+    });
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
     auto* header = new QVBoxLayout;
@@ -57,8 +63,8 @@ ControllerMapperWidget::ControllerMapperWidget(std::shared_ptr<ControllerMapping
     m_content->addWidget(m_canvas, 3);
     auto* panel = new QWidget(this); panel->setFixedWidth(320); auto* panelLayout = new QVBoxLayout(panel); panelLayout->setContentsMargins(0, 0, 0, 0); panelLayout->setSpacing(6);
     auto* title = new QLabel("Controles", panel); QFont titleFont = title->font(); titleFont.setBold(true); title->setFont(titleFont); panelLayout->addWidget(title);
-    m_captureBanner = new QLabel(panel); m_captureBanner->setStyleSheet("QLabel { background: #fff3cd; padding: 4px; }"); m_captureBanner->setVisible(false); panelLayout->addWidget(m_captureBanner);
-    m_controlsTable = new QTableWidget(panel); m_controlsTable->setObjectName("controlsTable"); m_controlsTable->setColumnCount(2); m_controlsTable->setHorizontalHeaderLabels({"Botón", "Tecla"}); m_controlsTable->verticalHeader()->hide(); m_controlsTable->setShowGrid(false); m_controlsTable->setAlternatingRowColors(true); m_controlsTable->setSelectionBehavior(QAbstractItemView::SelectRows); m_controlsTable->setEditTriggers(QAbstractItemView::NoEditTriggers); m_controlsTable->horizontalHeader()->setStretchLastSection(true); m_controlsTable->installEventFilter(this); panelLayout->addWidget(m_controlsTable);
+    m_captureBanner = new QLabel(panel); m_captureBanner->setStyleSheet("QLabel { background: #fff3cd; color: #3a2f00; padding: 5px 8px; border-radius: 4px; }"); m_captureBanner->setVisible(false); panelLayout->addWidget(m_captureBanner);
+    m_controlsTable = new QTableWidget(panel); m_controlsTable->setObjectName("controlsTable"); m_controlsTable->setColumnCount(2); m_controlsTable->setHorizontalHeaderLabels({"Botón", "Asignación"}); m_controlsTable->verticalHeader()->hide(); m_controlsTable->setShowGrid(false); m_controlsTable->setAlternatingRowColors(true); m_controlsTable->setSelectionBehavior(QAbstractItemView::SelectRows); m_controlsTable->setEditTriggers(QAbstractItemView::NoEditTriggers); m_controlsTable->horizontalHeader()->setStretchLastSection(true); m_controlsTable->installEventFilter(this); panelLayout->addWidget(m_controlsTable);
     auto* actions = new QHBoxLayout; m_changeKey = new QPushButton("Cambiar tecla", panel); m_changeKey->setObjectName("changeKeyButton"); m_remove = new QPushButton("Quitar", panel); m_remove->setObjectName("removeBindingButton"); actions->addWidget(m_changeKey); actions->addWidget(m_remove); panelLayout->addLayout(actions);
     auto* legend = new QLabel("<span style='color:#4caf50'>● asignado</span>  <span style='color:#9e9e9e'>● sin asignar</span>  <span style='color:#dc3545'>● conflicto</span>", panel); panelLayout->addWidget(legend);
     m_content->addWidget(panel); layout->addLayout(m_content, 1);
@@ -150,17 +156,18 @@ bool ControllerMapperWidget::eventFilter(QObject* watched, QEvent* event)
     }
     return QWidget::eventFilter(watched, event);
 }
-void ControllerMapperWidget::startCapture(const QString& id) { m_capturingId = id; selectControl(id); m_conflictIds.clear(); m_captureBanner->setText("Pulsa una tecla para " + id + " · Esc cancela"); m_captureBanner->setVisible(true); setFocus(); rebuildTable(); update(); }
+void ControllerMapperWidget::startCapture(const QString& id) { m_capturingId = id; selectControl(id); m_conflictIds.clear(); m_captureBanner->setText("Pulsa una tecla o un botón del mando para " + id + " · Esc cancela"); m_captureBanner->setVisible(true); m_gamepad->setActive(true); setFocus(); rebuildTable(); update(); }
 void ControllerMapperWidget::clearBinding(const QString& id) { m_mapping->clear(m_system, id); m_conflictIds.clear(); emit mappingChanged(); rebuildTable(); update(); }
 void ControllerMapperWidget::keyPressEvent(QKeyEvent* event)
 {
     if (m_capturingId.isEmpty()) { QWidget::keyPressEvent(event); return; }
-    if (event->key() == Qt::Key_Escape) { m_capturingId.clear(); m_conflictIds.clear(); m_captureBanner->setVisible(false); rebuildTable(); update(); return; }
+    if (event->key() == Qt::Key_Escape) { m_capturingId.clear(); m_conflictIds.clear(); m_captureBanner->setVisible(false); m_gamepad->setActive(false); rebuildTable(); update(); return; }
     if (event->isAutoRepeat()) return;
     applyBinding({InputDevice::Keyboard, event->key()});
 }
 void ControllerMapperWidget::applyBinding(const InputBinding& binding)
 {
+    m_gamepad->setActive(false);
     const QString id = m_capturingId; const QStringList conflicts = m_mapping->conflicts(m_system, id, binding);
     if (!conflicts.isEmpty()) {
         m_conflictIds = QSet<QString>(conflicts.cbegin(), conflicts.cend()); m_conflictIds.insert(id); update();

@@ -16,6 +16,7 @@
 #include "AudioSink.hpp"
 #include "NdsDisplayWidget.hpp"
 #include "AppNavigation.hpp"
+#include "GamepadReader.hpp"
 #include "pocket/emulator/MelonDsEngine.hpp"
 
 namespace Pocket::App {
@@ -40,6 +41,7 @@ private:
     // Flushes cartridge SRAM to disk before the core is torn down.
     void stopNdsEngine();
     Pocket::Emulator::LibretroEngineBase* activeEngine() const;
+    void applyGamepadButton(int presetIndex, bool pressed);
     QString activeSavePath() const;
     void saveActiveState(int slot);
     void loadActiveState(int slot);
@@ -64,6 +66,7 @@ private:
     std::unique_ptr<Pocket::Emulator::MelonDsEngine> m_ndsEngine;
     AudioSink m_ndsAudioSink;
     std::shared_ptr<Pocket::Input::ControllerMapping> m_controllerMapping;
+    GamepadReader* m_gamepad{nullptr};
 };
 
 } // namespace Pocket::App

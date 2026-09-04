@@ -75,13 +75,19 @@ private slots:
         QVERIFY(windowCol.value() < windowTextCol.value());
         QVERIFY(windowCol.lightness() < windowTextCol.lightness());
 
-        // Token constants check
-        QCOMPARE(Pocket::App::Theme::surface(), QColor("#14161a"));
-        QCOMPARE(Pocket::App::Theme::surfaceRaised(), QColor("#1f232a"));
+        // Tokens are checked by the relationships that must hold, not by exact
+        // hexes: pinning the literals made every palette tweak a test edit.
         QCOMPARE(Pocket::App::Theme::accent(), QColor("#4f8cff"));
-        QCOMPARE(Pocket::App::Theme::textPrimary(), QColor("#e8ecf2"));
-        QCOMPARE(Pocket::App::Theme::textSecondary(), QColor("#9aa4b2"));
-        QCOMPARE(Pocket::App::Theme::border(), QColor("#2a2f38"));
+        QVERIFY(Pocket::App::Theme::surface().lightness() < 40);
+        QVERIFY(Pocket::App::Theme::surfaceRaised().lightness() > Pocket::App::Theme::surface().lightness());
+        QVERIFY(Pocket::App::Theme::textPrimary().lightness() > 200);
+        QVERIFY(Pocket::App::Theme::textSecondary().lightness() < Pocket::App::Theme::textPrimary().lightness());
+        QVERIFY(Pocket::App::Theme::textDisabled().lightness() < Pocket::App::Theme::textSecondary().lightness());
+        // Translucent layers must actually be translucent, and lighter than the app.
+        QVERIFY(Pocket::App::Theme::surfacePanel().alpha() < 255);
+        QVERIFY(Pocket::App::Theme::surfaceControl().alpha() < 255);
+        QVERIFY(Pocket::App::Theme::borderSubtle().alpha() < Pocket::App::Theme::borderHover().alpha());
+        QCOMPARE(Pocket::App::Theme::rgba(QColor(20, 23, 28, 184)), QString("rgba(20, 23, 28, 0.722)"));
     }
 
     void activeSectionReflectedInBar() {

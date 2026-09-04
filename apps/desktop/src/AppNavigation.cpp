@@ -1,4 +1,6 @@
 #include "AppNavigation.hpp"
+#include "Icons.hpp"
+#include "Theme.hpp"
 #include <QHBoxLayout>
 #include <QStyle>
 
@@ -46,8 +48,11 @@ AppNavigation::AppNavigation(QWidget* parent)
     layout->addWidget(m_resumeButton);
 
     // Settings button on the right
-    m_settingsButton = new QPushButton(QString::fromUtf8("⚙ Settings"), this);
+    m_settingsButton = new QPushButton(QStringLiteral("Settings"), this);
     m_settingsButton->setObjectName("navSettings");
+    m_settingsButton->setIcon(Icons::icon(Icons::Name::Settings, Theme::textSecondary(), 15));
+    m_settingsButton->setToolTip(QStringLiteral("Ajustes"));
+    m_settingsButton->setToolTip(QStringLiteral("Ajustes de la aplicación"));
     m_settingsButton->setFocusPolicy(Qt::StrongFocus);
     m_settingsButton->setCheckable(true);
     layout->addWidget(m_settingsButton);
@@ -75,7 +80,8 @@ AppNavigation::AppNavigation(QWidget* parent)
 void AppNavigation::setRunningGame(const QString& title)
 {
     const QString shown = title.size() > 28 ? title.left(27) + QChar(0x2026) : title;
-    m_resumeButton->setText(QString::fromUtf8("▶ %1").arg(shown));
+    m_resumeButton->setIcon(Icons::icon(Icons::Name::Play, Theme::textPrimary(), 14));
+    m_resumeButton->setText(shown);
     m_resumeButton->setToolTip(QStringLiteral("Volver a %1").arg(title));
     m_resumeButton->setVisible(true);
 }

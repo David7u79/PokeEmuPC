@@ -1,5 +1,6 @@
 #include "LibrarySidebar.hpp"
 
+#include "Icons.hpp"
 #include "Theme.hpp"
 
 #include <QHBoxLayout>
@@ -7,23 +8,31 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
+#include <optional>
+
 namespace Pocket::App {
 
 class CategoryRow final : public QWidget {
     Q_OBJECT
 
 public:
-    CategoryRow(const QString& label, const QString& category, QWidget* parent)
+    CategoryRow(const QString& label, const QString& category, QWidget* parent, std::optional<Icons::Name> icon = std::nullopt)
         : QWidget(parent)
         , m_category(category)
     {
-        setFixedHeight(32);
+        setFixedHeight(30);
         setFocusPolicy(Qt::StrongFocus);
         auto* layout = new QHBoxLayout(this);
         layout->setContentsMargins(0, 0, 8, 0);
         layout->setSpacing(8);
         m_marker = new QWidget(this);
-        m_marker->setFixedWidth(3);
+        m_marker->setFixedWidth(2);
+        m_iconName = icon;
+        if (icon) {
+            m_icon = new QLabel(this);
+            m_icon->setPixmap(Icons::pixmap(*icon, Theme::textSecondary(), 15));
+            layout->addWidget(m_icon);
+        }
         m_label = new QLabel(label, this);
         m_count = new QLabel("0", this);
         m_count->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -86,23 +95,31 @@ protected:
 private:
     void refreshStyle()
     {
-        const QColor surface = Theme::surface();
-        const QColor raised = Theme::surfaceRaised();
-        const QColor accent = Theme::accent();
+        // Active state is the accent bar plus brighter text. No filled rectangle:
+        // the sidebar should not compete with the covers.
+        QColor marker = Theme::accent();
+        marker.setAlphaF(0.85);
         const QColor primary = Theme::textPrimary();
         const QColor secondary = Theme::textSecondary();
-        setStyleSheet(QString("CategoryRow { background: %1; border: 1px solid transparent; border-radius: 4px; }"
+        setStyleSheet(QString("CategoryRow { background: transparent; border: 1px solid transparent; border-radius: 5px; }"
+                              "CategoryRow:hover { background: %1; }"
                               "CategoryRow:focus { border-color: %2; }"
                               "QLabel { background: transparent; color: %3; }"
-                              "QWidget#marker { background: %4; }")
-                          .arg(m_active ? raised.name() : surface.name(), accent.name(),
+                              "QWidget#marker { background: %4; border-radius: 1px; }")
+                          .arg(Theme::rgba(Theme::surfaceHover()),
+                               Theme::accent().name(),
                                m_active ? primary.name() : secondary.name(),
-                               m_active ? accent.name() : surface.name()));
+                               m_active ? marker.name(QColor::HexArgb) : QStringLiteral("transparent")));
         m_marker->setObjectName("marker");
+        if (m_icon && m_iconName) {
+            m_icon->setPixmap(Icons::pixmap(*m_iconName, m_active ? primary : secondary, 15));
+        }
     }
 
     QString m_category;
     QWidget* m_marker{nullptr};
+    QLabel* m_icon{nullptr};
+    std::optional<Icons::Name> m_iconName;
     QLabel* m_label{nullptr};
     QLabel* m_count{nullptr};
     bool m_active{false};
@@ -112,14 +129,17 @@ LibrarySidebar::LibrarySidebar(QWidget* parent)
     : QWidget(parent)
 {
     setObjectName("categoryList");
-    setFixedWidth(210);
-    setStyleSheet(QString("LibrarySidebar { background: %1; }").arg(Theme::surface().name()));
+    setFixedWidth(206);
+    // Translucent layer, no panel colour of its own: navigation should not compete
+    // with the covers.
+    setStyleSheet(QString("LibrarySidebar { background: %1; border-radius: 10px; }")
+                      .arg(Theme::rgba(Theme::surfacePanel())));
     m_layout = new QVBoxLayout(this);
-    m_layout->setContentsMargins(8, 8, 8, 8);
+    m_layout->setContentsMargins(8, 10, 8, 10);
     m_layout->setSpacing(2);
     addSection("LIBRARY");
-    addCategory("All Games", "Todos");
-    addCategory("Recently Played", "Recientes");
+    addCategory("All Games", "Todos", Icons::Name::Grid);
+    addCategory("Recently Played", "Recientes", Icons::Name::Clock);
     m_layout->addSpacing(12);
     addSection("SYSTEMS");
     addCategory("Game Boy", "GB");
@@ -152,16 +172,18 @@ void LibrarySidebar::addSection(const QString& title)
     auto* heading = new QLabel(title, this);
     QFont font = heading->font();
     font.setCapitalization(QFont::AllUppercase);
-    font.setPointSize(qMax(8, font.pointSize() - 2));
-    font.setBold(true);
+    font.setPixelSize(11);
+    font.setWeight(QFont::DemiBold);
+    font.setLetterSpacing(QFont::AbsoluteSpacing, 0.8);
     heading->setFont(font);
-    heading->setStyleSheet(QString("color: %1; background: transparent;").arg(Theme::textSecondary().name()));
+    heading->setStyleSheet(QString("color: %1; background: transparent; padding: 6px 4px 2px 4px;")
+                               .arg(Theme::textDisabled().name()));
     m_layout->addWidget(heading);
 }
 
-void LibrarySidebar::addCategory(const QString& label, const QString& category)
+void LibrarySidebar::addCategory(const QString& label, const QString& category, std::optional<Icons::Name> icon)
 {
-    auto* row = new CategoryRow(label, category, this);
+    auto* row = new CategoryRow(label, category, this, icon);
     m_rows.insert(category, row);
     connect(row, &CategoryRow::activated, this, &LibrarySidebar::selectCategory);
     connect(row, &CategoryRow::moveRequested, this, &LibrarySidebar::moveCategory);

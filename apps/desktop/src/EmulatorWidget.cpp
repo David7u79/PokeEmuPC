@@ -415,16 +415,32 @@ void EmulatorWidget::beginCapture(const QString& controlId)
     setFocus(); update();
 }
 
+void EmulatorWidget::setControlPressed(const QString& controlId, bool pressed)
+{
+    if (controlId.isEmpty()) return;
+    m_hintOverlay.setPressed(controlId, pressed);
+    update();
+}
+
+void EmulatorWidget::applyCapturedGamepadBinding(int gamepadIndex)
+{
+    applyCapturedBinding(Pocket::Input::InputBinding{Pocket::Input::InputDevice::Gamepad, gamepadIndex});
+}
+
 void EmulatorWidget::applyCapturedBinding(int key)
+{
+    applyCapturedBinding(Pocket::Input::InputBinding{Pocket::Input::InputDevice::Keyboard, key});
+}
+
+void EmulatorWidget::applyCapturedBinding(const Pocket::Input::InputBinding& binding)
 {
     if (!m_mapping || m_capturingControlId.isEmpty()) return;
     const QString controlId = m_capturingControlId;
-    const Pocket::Input::InputBinding binding{Pocket::Input::InputDevice::Keyboard, key};
     const QStringList conflicts = m_mapping->conflicts(m_controllerSystem, controlId, binding);
     if (!conflicts.isEmpty()) {
         const QString other = controlDisplayName(conflicts.first());
         if (QMessageBox::question(this, QStringLiteral("Reasignar %1").arg(controlDisplayName(controlId)),
-                                  QStringLiteral("La tecla ya está asignada a %1. ¿Reemplazarla?").arg(other)) != QMessageBox::Yes) {
+                                  QStringLiteral("%1 ya está asignado a %2. ¿Reemplazarlo?").arg(binding.label(), other)) != QMessageBox::Yes) {
             m_hintOverlay.setPressed(controlId, false);
             m_hintOverlay.setCaptureHighlight(controlId, false);
             m_capturingControlId.clear(); m_captureBlinkTimer.stop(); update(); return;

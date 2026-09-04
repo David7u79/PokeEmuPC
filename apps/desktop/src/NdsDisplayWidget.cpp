@@ -205,6 +205,12 @@ void NdsDisplayWidget::toggleHints() {
     setHintsVisible(!m_hintsVisible);
 }
 
+void NdsDisplayWidget::setControlPressed(const QString& controlId, bool pressed) {
+    if (controlId.isEmpty()) return;
+    m_hintOverlay.setPressed(controlId, pressed);
+    update();
+}
+
 void NdsDisplayWidget::refreshKeyBindings() {
     m_keyBindings.clear();
     m_keyControlIds.clear();

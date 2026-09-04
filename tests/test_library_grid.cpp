@@ -185,8 +185,11 @@ private slots:
         zoom->setValue(240);
         const QSize after=grid->itemDelegate()->sizeHint(QStyleOptionViewItem(),grid->model()->index(0,0));
         QVERIFY(after.width()>before.width());
-        QCOMPARE(before.height(), before.width()+42);
-        QCOMPARE(after.height(), after.width()+42);
+        // Portrait cover stage plus a metadata band that is constant per zoom level:
+        // titles and platforms keep a shared baseline whatever the artwork shape is.
+        QVERIFY(after.height()>before.height());
+        QVERIFY(before.height()>before.width());
+        QVERIFY(after.height()>after.width());
     }
     void personalOrderEnablesDragAndIsRestored() {
         QTemporaryFile database; QTemporaryDir roms; auto repo=makeRepository(database,roms); QVERIFY(repo);

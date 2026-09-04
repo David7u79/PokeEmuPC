@@ -112,6 +112,8 @@ add_executable(test_controller_mapper_widget
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/InteractiveControlLayer.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/ControllerMapperWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/ControllerMapperWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GamepadReader.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GamepadReader.cpp
 )
 target_include_directories(test_controller_mapper_widget PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
 target_link_libraries(test_controller_mapper_widget PRIVATE Qt6::Core Qt6::Test Qt6::Widgets Qt6::Svg Qt6::SvgWidgets pocket_input)
@@ -257,13 +259,15 @@ add_executable(test_library_grid
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/ArtworkPickerDialog.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameCardDelegate.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameCardDelegate.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/Icons.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/Icons.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibrarySidebar.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibrarySidebar.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/EmptyStateWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/EmptyStateWidget.cpp
 )
 target_include_directories(test_library_grid PRIVATE ${CMAKE_SOURCE_DIR}/apps/desktop/include)
-target_link_libraries(test_library_grid PRIVATE Qt6::Core Qt6::Gui Qt6::Test Qt6::Widgets Qt6::Network pocket_core pocket_storage)
+target_link_libraries(test_library_grid PRIVATE Qt6::Core Qt6::Gui Qt6::Test Qt6::Widgets Qt6::Network Qt6::Svg pocket_core pocket_storage)
 add_test(NAME test_library_grid COMMAND test_library_grid)
 if(WIN32 AND EXISTS "C:/Qt/6.7.2/msvc2019_64/bin")
     set_tests_properties(test_library_grid PROPERTIES ENVIRONMENT "PATH=C:/Qt/6.7.2/msvc2019_64/bin;$ENV{PATH};QT_PLUGIN_PATH=C:/Qt/6.7.2/msvc2019_64/plugins;QT_QPA_PLATFORM=offscreen")
@@ -316,6 +320,8 @@ add_executable(test_app_navigation
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/AppNavigation.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/MainWindow.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/MainWindow.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GamepadReader.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GamepadReader.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibraryWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibraryWidget.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameInspector.hpp
@@ -328,6 +334,8 @@ add_executable(test_app_navigation
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/ArtworkPickerDialog.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/GameCardDelegate.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/GameCardDelegate.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/Icons.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/Icons.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/LibrarySidebar.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/LibrarySidebar.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/EmptyStateWidget.hpp
@@ -358,6 +366,8 @@ add_executable(test_app_navigation
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/InteractiveControlLayer.cpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/include/ControllerMapperWidget.hpp
     ${CMAKE_SOURCE_DIR}/apps/desktop/src/ControllerMapperWidget.cpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/include/GamepadReader.hpp
+    ${CMAKE_SOURCE_DIR}/apps/desktop/src/GamepadReader.cpp
 )
 target_include_directories(test_app_navigation PRIVATE
     ${CMAKE_SOURCE_DIR}/apps/desktop/include

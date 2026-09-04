@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ControllerArtworkLayer.hpp"
+#include "GamepadReader.hpp"
 #include "InteractiveControlLayer.hpp"
 #include "pocket/input/ControllerMapping.hpp"
 #include <QWidget>
@@ -55,6 +56,7 @@ private:
     void loadPreset(bool gamepad);
 
     std::shared_ptr<Pocket::Input::ControllerMapping> m_mapping;
+    GamepadReader* m_gamepad{};
     ControllerArtworkLayer m_artwork;
     InteractiveControlLayer m_interactive;
     QString m_system{"GBA"};

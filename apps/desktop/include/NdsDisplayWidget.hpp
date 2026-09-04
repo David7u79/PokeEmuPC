@@ -30,6 +30,8 @@ public:
     void submitCombinedFrame(const uint8_t* pixels, int width, int height, size_t pitch);
     void setControllerMapping(std::shared_ptr<Pocket::Input::ControllerMapping> mapping);
     void refreshKeyBindings();
+    // Lights a control on the console art from an input read elsewhere (gamepad).
+    void setControlPressed(const QString& controlId, bool pressed);
     bool hintsVisible() const { return m_hintsVisible; }
     void setHintsVisible(bool visible);
     void toggleHints();

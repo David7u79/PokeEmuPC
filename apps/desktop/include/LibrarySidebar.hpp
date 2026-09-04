@@ -3,6 +3,10 @@
 #include <QHash>
 #include <QWidget>
 
+#include <optional>
+
+#include "Icons.hpp"
+
 class QVBoxLayout;
 
 namespace Pocket::App {
@@ -22,7 +26,7 @@ signals:
 
 private:
     void addSection(const QString& title);
-    void addCategory(const QString& label, const QString& category);
+    void addCategory(const QString& label, const QString& category, std::optional<Icons::Name> icon = std::nullopt);
     void selectCategory(const QString& category);
     void moveCategory(int offset);
 

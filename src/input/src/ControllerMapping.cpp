@@ -50,6 +50,8 @@ ControllerMapping ControllerMapping::keyboardPreset()
     return mapping;
 }
 
+const QStringList& ControllerMapping::presetControlIds() { return presetIds(); }
+
 ControllerMapping ControllerMapping::genericGamepadPreset()
 {
     ControllerMapping mapping;

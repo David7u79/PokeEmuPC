@@ -27,6 +27,10 @@ public:
     static ControllerMapping keyboardPreset();
     static ControllerMapping genericGamepadPreset();
 
+    // Control ids in preset order. A gamepad binding's code is an index into this
+    // list, so whoever reads a physical pad needs the same order.
+    static const QStringList& presetControlIds();
+
     MappingScope scope() const;
     void setScope(MappingScope scope);   // Global: todos los sistemas comparten una tabla
 

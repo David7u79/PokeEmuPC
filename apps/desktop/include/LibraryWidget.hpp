@@ -49,6 +49,11 @@ private:
     void updateCategoryCounts();
     void applyFilters();
     void importGames(const QStringList& filePaths);
+    void applyCardZoom(int sliderValue);
+    void changeArtwork();
+    void chooseArtworkImage();
+    void openRomLocation();
+    void showCardContextMenu(const QPoint& viewportPos);
     void savePersonalOrder();
     std::optional<Core::Game> gameForIndex(const QModelIndex& index) const;
 
@@ -66,6 +71,7 @@ private:
     QSlider* m_cardZoom{nullptr};
     GameCardDelegate* m_delegate{nullptr};
     GameArtworkLoader* m_artworkLoader{nullptr};
+    double m_tallestCover{0.90};
     QString m_settingsOrganization;
     QString m_settingsApplication;
 };
